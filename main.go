@@ -25,13 +25,14 @@ var (
 			Width:  64 * 4,
 			Height: 44 * 4,
 		},
-		speed:         20,
-		isRunnging:    false,
-		isFacingRight: true,
-		isAttacking:   false,
-		attackType:    0,
-		scale:         5,
-		sprite:        nil,
+		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - (44 * 5)},
+		speed:          20,
+		isRunnging:     false,
+		isFacingRight:  true,
+		isAttacking:    false,
+		attackType:     0,
+		scale:          5,
+		sprite:         nil,
 	}
 	deltaTime           float32 = 0
 	animationPhase      int     = 0
@@ -40,24 +41,27 @@ var (
 
 // Background layers
 var (
-	bg_layer_0         *rl.Texture2D
-	bg_layer_1         *rl.Texture2D
-	bg_layer_2         *rl.Texture2D
-	bg_layer_3         *rl.Texture2D
-	bg_layer_4         *rl.Texture2D
-	bg_layer_5         *rl.Texture2D
-	bg_layer_6         *rl.Texture2D
-	bg_layer_7         *rl.Texture2D
-	bg_layer_8         *rl.Texture2D
-	bg_layer_9         *rl.Texture2D
-	bg_layer_10        *rl.Texture2D
-	scrolling_backback = 0
-	scrolling_back     = 0
-	scrolling_backmid  = 0
-	scrolling_mid      = 0
-	scrolling_midfore  = 0
-	scrolling_fore     = 0
-	scrolling_forefore = 0
+	bg_layer_0          *rl.Texture2D
+	bg_layer_1          *rl.Texture2D
+	bg_layer_2          *rl.Texture2D
+	bg_layer_3          *rl.Texture2D
+	bg_layer_4          *rl.Texture2D
+	bg_layer_5          *rl.Texture2D
+	bg_layer_6          *rl.Texture2D
+	bg_layer_7          *rl.Texture2D
+	bg_layer_8          *rl.Texture2D
+	bg_layer_9          *rl.Texture2D
+	bg_layer_10         *rl.Texture2D
+	scrolling_backback  = 0
+	scrolling_back      = 0
+	scrolling_clouds    = 0
+	scrolling_backmid   = 0
+	scrolling_mid       = 0
+	scrolling_midmid    = 0
+	scrolling_midmidmid = 0
+	scrolling_midfore   = 0
+	scrolling_fore      = 0
+	scrolling_forefore  = 0
 )
 
 // Constants
@@ -108,6 +112,8 @@ func (a *App) Setup() {
 	bg_layer_4 = get_texture(backgroundSprites[4])
 	bg_layer_5 = get_texture(backgroundSprites[5])
 	bg_layer_6 = get_texture(backgroundSprites[6])
+	bg_layer_7 = get_texture(backgroundSprites[7])
+	bg_layer_8 = get_texture(backgroundSprites[8])
 }
 
 func (a *App) Update() {
@@ -160,6 +166,7 @@ func (a *App) Update() {
 	fmt.Print("\033[H\033[2J")
 	PrintMemUsage()
 	fmt.Printf("Player position: x {%f} y{%f} \n", Player.transform.X, Player.transform.Y)
+	fmt.Printf("Player world position: x: {%f} y: {%f}\n", Player.world_position.X, Player.world_position.Y)
 	println("Player is using attack: ", Player.attackType)
 	println("Player is attacking: ", Player.isAttacking)
 	println("Player is running: ", Player.isRunnging)
@@ -168,9 +175,6 @@ func (a *App) Update() {
 }
 
 func (a *App) Draw() {
-	// Draw fps for debugging
-	rl.DrawFPS(10, 10)
-
 	draw_background()
 
 	// Draw the player sprite
@@ -180,9 +184,13 @@ func (a *App) Draw() {
 		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: -Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
 	}
 
-	// Draw foreground over player
-	rl.DrawTextureRec(*bg_layer_6, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_6.Width), Height: float32(bg_layer_6.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	scrolling_clouds += 1
 
+	// Draw foreground over player
+	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_6.Width), Height: float32(bg_layer_6.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+
+	// Draw fps for debugging
+	rl.DrawFPS(10, 10)
 }
 
 // Player specific behaviours
@@ -193,30 +201,20 @@ func (a *App) idle_player() {
 	Player.sprite = sprite
 }
 func (a *App) run_left() {
+	Player.world_position.X -= Player.speed
 	Player.isRunnging = true
 	Player.isFacingRight = false
-	// Player.transform.X -= Player.speed * 25 * deltaTime
-	scrolling_back -= 1
-	scrolling_backmid -= 2
-	scrolling_mid -= 3
-	scrolling_midfore -= 4
-	scrolling_fore -= int(Player.speed * 15 * deltaTime)
-	scrolling_forefore -= int(Player.speed * 25 * deltaTime)
+	scroll_background(false)
 	sprite := a.get_anim_sprite(RUN_ANIM, 100/int(Player.speed))
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
 	Player.sprite = sprite
 }
 func (a *App) run_right() {
+	Player.world_position.X += Player.speed
 	Player.isRunnging = true
 	Player.isFacingRight = true
-	// Player.transform.X += Player.speed * 25 * deltaTime
-	scrolling_back += 1
-	scrolling_backmid += 2
-	scrolling_mid += 3
-	scrolling_midfore += 4
-	scrolling_fore += int(Player.speed * 15 * deltaTime)
-	scrolling_forefore += int(Player.speed * 25 * deltaTime)
+	scroll_background(true)
 	sprite := a.get_anim_sprite(RUN_ANIM, 100/int(Player.speed))
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
@@ -271,13 +269,34 @@ func draw_background() {
 	bg_layer_5.Height = int32(windowSize.Y)
 	bg_layer_6.Width = int32(windowSize.X)
 	bg_layer_6.Height = int32(windowSize.Y)
+	bg_layer_7.Width = int32(windowSize.X)
+	bg_layer_7.Height = int32(windowSize.Y)
+	bg_layer_8.Width = int32(windowSize.X)
+	bg_layer_8.Height = int32(windowSize.Y)
 
-	rl.DrawTextureRec(*bg_layer_0, rl.Rectangle{X: float32(scrolling_backback), Y: 0, Width: float32(bg_layer_0.Width), Height: float32(bg_layer_0.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
-	rl.DrawTextureRec(*bg_layer_1, rl.Rectangle{X: float32(scrolling_back), Y: 0, Width: float32(bg_layer_1.Width), Height: float32(bg_layer_1.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
-	rl.DrawTextureRec(*bg_layer_2, rl.Rectangle{X: float32(scrolling_backmid), Y: 0, Width: float32(bg_layer_2.Width), Height: float32(bg_layer_2.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
-	rl.DrawTextureRec(*bg_layer_3, rl.Rectangle{X: float32(scrolling_mid), Y: 0, Width: float32(bg_layer_3.Width), Height: float32(bg_layer_3.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
-	rl.DrawTextureRec(*bg_layer_4, rl.Rectangle{X: float32(scrolling_midfore), Y: 0, Width: float32(bg_layer_4.Width), Height: float32(bg_layer_4.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
-	rl.DrawTextureRec(*bg_layer_5, rl.Rectangle{X: float32(scrolling_fore), Y: 0, Width: float32(bg_layer_4.Width), Height: float32(bg_layer_4.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_0, rl.Rectangle{X: float32(scrolling_backback), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_1, rl.Rectangle{X: float32(scrolling_back), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_2, rl.Rectangle{X: float32(scrolling_clouds), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_3, rl.Rectangle{X: float32(scrolling_backmid), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_4, rl.Rectangle{X: float32(scrolling_mid), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_5, rl.Rectangle{X: float32(scrolling_midmid), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_6, rl.Rectangle{X: float32(scrolling_midmidmid), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_7, rl.Rectangle{X: float32(scrolling_midfore), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+}
+func scroll_background(is_right bool) {
+	scroll_factor := -1
+	if is_right {
+		scroll_factor = 1
+	}
+	scrolling_backback += 1 * scroll_factor
+	scrolling_back += 2 * scroll_factor
+	scrolling_backmid += 3 * scroll_factor
+	scrolling_mid += 4 * scroll_factor
+	scrolling_midmid += 5 * scroll_factor
+	scrolling_midmidmid += 6 * scroll_factor
+	scrolling_midfore += 7 * scroll_factor
+	scrolling_fore += int(Player.speed*15*deltaTime) * scroll_factor
+	scrolling_forefore += int(Player.speed*30*deltaTime) * scroll_factor
 }
 
 // Utility functions

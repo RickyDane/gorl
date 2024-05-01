@@ -56,8 +56,10 @@ var (
 	backgroundSprites = []*rl.Image{
 		rl.LoadImage("assets/background/back.png"),
 		rl.LoadImage("assets/background/back-back.png"),
+		rl.LoadImage("assets/background/clouds.png"),
 		rl.LoadImage("assets/background/back-mid.png"),
 		rl.LoadImage("assets/background/mid.png"),
+		rl.LoadImage("assets/background/mid-mid.png"),
 		rl.LoadImage("assets/background/mid-fore.png"),
 		rl.LoadImage("assets/background/fore.png"),
 		rl.LoadImage("assets/background/fore-fore.png"),
