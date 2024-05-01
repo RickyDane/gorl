@@ -20,22 +20,44 @@ var (
 	}
 	Player = Entity{
 		transform: rl.Rectangle{
-			X:      100,
-			Y:      windowSize.Y - (44 * 3),
-			Width:  64 * 3,
-			Height: 44 * 3,
+			X:      windowSize.X / 4,
+			Y:      windowSize.Y - (44 * 5),
+			Width:  64 * 4,
+			Height: 44 * 4,
 		},
 		speed:         20,
 		isRunnging:    false,
 		isFacingRight: true,
 		isAttacking:   false,
 		attackType:    0,
-		scale:         3,
+		scale:         5,
 		sprite:        nil,
 	}
 	deltaTime           float32 = 0
 	animationPhase      int     = 0
 	betweenAttacksTimer float32 = TIME_FOR_ATTACK_2
+)
+
+// Background layers
+var (
+	bg_layer_0         *rl.Texture2D
+	bg_layer_1         *rl.Texture2D
+	bg_layer_2         *rl.Texture2D
+	bg_layer_3         *rl.Texture2D
+	bg_layer_4         *rl.Texture2D
+	bg_layer_5         *rl.Texture2D
+	bg_layer_6         *rl.Texture2D
+	bg_layer_7         *rl.Texture2D
+	bg_layer_8         *rl.Texture2D
+	bg_layer_9         *rl.Texture2D
+	bg_layer_10        *rl.Texture2D
+	scrolling_backback = 0
+	scrolling_back     = 0
+	scrolling_backmid  = 0
+	scrolling_mid      = 0
+	scrolling_midfore  = 0
+	scrolling_fore     = 0
+	scrolling_forefore = 0
 )
 
 // Constants
@@ -53,7 +75,7 @@ func main() {
 	rl.InitWindow(int32(windowSize.X), int32(windowSize.Y), "Demon Slayer")
 	defer rl.CloseWindow()
 
-	rl.SetTargetFPS(60)
+	app.Setup()
 
 	// Main loop for window / game
 	for !rl.WindowShouldClose() {
@@ -68,7 +90,24 @@ func main() {
 		app.Draw()
 
 		rl.EndDrawing()
+		if app.frameCount%500 == 0 {
+			runtime.GC()
+		}
 	}
+}
+
+func (a *App) Setup() {
+	// Set target FPS
+	rl.SetTargetFPS(60)
+
+	// Load sprites for background
+	bg_layer_0 = get_texture(backgroundSprites[0])
+	bg_layer_1 = get_texture(backgroundSprites[1])
+	bg_layer_2 = get_texture(backgroundSprites[2])
+	bg_layer_3 = get_texture(backgroundSprites[3])
+	bg_layer_4 = get_texture(backgroundSprites[4])
+	bg_layer_5 = get_texture(backgroundSprites[5])
+	bg_layer_6 = get_texture(backgroundSprites[6])
 }
 
 func (a *App) Update() {
@@ -86,6 +125,7 @@ func (a *App) Update() {
 		} else if betweenAttacksTimer > 0 {
 			if rl.IsMouseButtonDown(rl.MouseButtonLeft) && Player.attackType != ATTACK_LIGHT_BACK {
 				Player.attackType = ATTACK_LIGHT_BACK
+				a.reset_for_animation()
 				a.play_attack_animation()
 			}
 			betweenAttacksTimer -= 1 * deltaTime
@@ -117,11 +157,8 @@ func (a *App) Update() {
 	}
 
 	// Debug print output
-	m := runtime.MemStats(*new(runtime.MemStats))
-	runtime.ReadMemStats(&m)
 	fmt.Print("\033[H\033[2J")
-	fmt.Printf("Memory usage: %d MB\n", m.Alloc/1024/1024)
-	println("Player.sprite: ", Player.sprite)
+	PrintMemUsage()
 	fmt.Printf("Player position: x {%f} y{%f} \n", Player.transform.X, Player.transform.Y)
 	println("Player is using attack: ", Player.attackType)
 	println("Player is attacking: ", Player.isAttacking)
@@ -134,6 +171,8 @@ func (a *App) Draw() {
 	// Draw fps for debugging
 	rl.DrawFPS(10, 10)
 
+	draw_background()
+
 	// Draw the player sprite
 	if Player.isFacingRight {
 		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
@@ -141,46 +180,123 @@ func (a *App) Draw() {
 		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: -Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
 	}
 
+	// Draw foreground over player
+	rl.DrawTextureRec(*bg_layer_6, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_6.Width), Height: float32(bg_layer_6.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+
 }
 
 // Player specific behaviours
 func (a *App) idle_player() {
-	Player.sprite = a.get_sprite(IDLE_ANIM, 8)
+	sprite := a.get_anim_sprite(IDLE_ANIM, 8)
+	sprite.Width = Player.transform.ToInt32().Width
+	sprite.Height = Player.transform.ToInt32().Height
+	Player.sprite = sprite
 }
 func (a *App) run_left() {
-	Player.transform.X -= Player.speed * 25 * deltaTime
 	Player.isRunnging = true
 	Player.isFacingRight = false
-	Player.sprite = a.get_sprite(RUN_ANIM, 100/int(Player.speed))
+	// Player.transform.X -= Player.speed * 25 * deltaTime
+	scrolling_back -= 1
+	scrolling_backmid -= 2
+	scrolling_mid -= 3
+	scrolling_midfore -= 4
+	scrolling_fore -= int(Player.speed * 15 * deltaTime)
+	scrolling_forefore -= int(Player.speed * 25 * deltaTime)
+	sprite := a.get_anim_sprite(RUN_ANIM, 100/int(Player.speed))
+	sprite.Width = Player.transform.ToInt32().Width
+	sprite.Height = Player.transform.ToInt32().Height
+	Player.sprite = sprite
 }
 func (a *App) run_right() {
-	Player.transform.X += Player.speed * 25 * deltaTime
 	Player.isRunnging = true
 	Player.isFacingRight = true
-	Player.sprite = a.get_sprite(RUN_ANIM, 100/int(Player.speed))
+	// Player.transform.X += Player.speed * 25 * deltaTime
+	scrolling_back += 1
+	scrolling_backmid += 2
+	scrolling_mid += 3
+	scrolling_midfore += 4
+	scrolling_fore += int(Player.speed * 15 * deltaTime)
+	scrolling_forefore += int(Player.speed * 25 * deltaTime)
+	sprite := a.get_anim_sprite(RUN_ANIM, 100/int(Player.speed))
+	sprite.Width = Player.transform.ToInt32().Width
+	sprite.Height = Player.transform.ToInt32().Height
+	Player.sprite = sprite
 }
 func (a *App) play_attack_animation() {
+	sprite := rl.Texture2D{}
 	switch Player.attackType {
 	case ATTACK_LIGHT:
-		Player.sprite = a.get_sprite(ATTACK_ANIM, 5)
+		sprite = *a.get_anim_sprite(ATTACK_ANIM, 4)
 	case ATTACK_LIGHT_BACK:
-		Player.sprite = a.get_sprite(ATTACK2_ANIM, 4)
+		sprite = *a.get_anim_sprite(ATTACK2_ANIM, 2)
 	case ATTACK_HEAVY:
-		Player.sprite = a.get_sprite(ATTACK3_ANIM, 4)
+		sprite = *a.get_anim_sprite(ATTACK3_ANIM, 4)
 	}
+	sprite.Width = Player.transform.ToInt32().Width
+	sprite.Height = Player.transform.ToInt32().Height
+	Player.sprite = &sprite
+}
+
+func draw_background() {
+	if int32(scrolling_back) <= -bg_layer_0.Width*2 {
+		scrolling_back = 0
+	}
+	if int32(scrolling_backmid) <= -bg_layer_1.Width*2 {
+		scrolling_backmid = 0
+	}
+	if int32(scrolling_mid) <= -bg_layer_2.Width*2 {
+		scrolling_mid = 0
+	}
+	if int32(scrolling_midfore) <= -bg_layer_3.Width*2 {
+		scrolling_midfore = 0
+	}
+	if int32(scrolling_fore) <= -bg_layer_4.Width*2 {
+		scrolling_fore = 0
+	}
+	if int32(scrolling_forefore) <= -bg_layer_5.Width*2 {
+		scrolling_forefore = 0
+	}
+
+	bg_layer_0.Width = int32(windowSize.X)
+	bg_layer_0.Height = int32(windowSize.Y)
+	bg_layer_1.Width = int32(windowSize.X)
+	bg_layer_1.Height = int32(windowSize.Y)
+	bg_layer_2.Width = int32(windowSize.X)
+	bg_layer_2.Height = int32(windowSize.Y)
+	bg_layer_3.Width = int32(windowSize.X)
+	bg_layer_3.Height = int32(windowSize.Y)
+	bg_layer_4.Width = int32(windowSize.X)
+	bg_layer_4.Height = int32(windowSize.Y)
+	bg_layer_5.Width = int32(windowSize.X)
+	bg_layer_5.Height = int32(windowSize.Y)
+	bg_layer_6.Width = int32(windowSize.X)
+	bg_layer_6.Height = int32(windowSize.Y)
+
+	rl.DrawTextureRec(*bg_layer_0, rl.Rectangle{X: float32(scrolling_backback), Y: 0, Width: float32(bg_layer_0.Width), Height: float32(bg_layer_0.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_1, rl.Rectangle{X: float32(scrolling_back), Y: 0, Width: float32(bg_layer_1.Width), Height: float32(bg_layer_1.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_2, rl.Rectangle{X: float32(scrolling_backmid), Y: 0, Width: float32(bg_layer_2.Width), Height: float32(bg_layer_2.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_3, rl.Rectangle{X: float32(scrolling_mid), Y: 0, Width: float32(bg_layer_3.Width), Height: float32(bg_layer_3.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_4, rl.Rectangle{X: float32(scrolling_midfore), Y: 0, Width: float32(bg_layer_4.Width), Height: float32(bg_layer_4.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_5, rl.Rectangle{X: float32(scrolling_fore), Y: 0, Width: float32(bg_layer_4.Width), Height: float32(bg_layer_4.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 }
 
 // Utility functions
 func get_texture(sprite *rl.Image) *rl.Texture2D {
-	if Player.sprite != nil {
-		rl.UnloadTexture(*Player.sprite)
-	}
 	result := rl.LoadTextureFromImage(sprite)
-	result.Width = Player.transform.ToInt32().Width
-	result.Height = Player.transform.ToInt32().Height
 	return &result
 }
 func (a *App) reset_for_animation() {
 	animationPhase = 0
 	a.frameCount = 0
+}
+func PrintMemUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("Alloc = %f MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %f MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %f MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+func bToMb(b uint64) float32 {
+	return float32(b) / 1024.0 / 1024.0
 }
