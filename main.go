@@ -8,12 +8,11 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-type App struct {
-	frameCount int32
-}
+type App struct{}
 
 // Global variables
 var (
+	frameCount int32
 	windowSize = rl.Vector2{
 		X: 1280,
 		Y: 720,
@@ -21,22 +20,27 @@ var (
 	Player = Entity{
 		transform: rl.Rectangle{
 			X:      windowSize.X / 4,
-			Y:      windowSize.Y - (44 * 5),
-			Width:  64 * 4,
-			Height: 44 * 4,
+			Y:      windowSize.Y - (33 * 5) - 50,
+			Width:  33 * 5,
+			Height: 33 * 5,
 		},
-		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - (44 * 5)},
+		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - 33*5 - 50},
 		speed:          20,
+		sprint_speed:   30,
 		isRunnging:     false,
 		isFacingRight:  true,
 		isAttacking:    false,
 		attackType:     0,
 		scale:          5,
 		sprite:         nil,
+		sprite_set:     0,
+		entity_type:    PLAYER,
+		hitbox:         rl.Rectangle{X: windowSize.X/4 + (33 * 5 / 4), Y: windowSize.Y - (33 * 6), Width: (33 * 5) / 2, Height: 33 * 5},
 	}
-	deltaTime           float32 = 0
-	animationPhase      int     = 0
-	betweenAttacksTimer float32 = TIME_FOR_ATTACK_2
+	deltaTime           float32  = 0
+	betweenAttacksTimer float32  = TIME_FOR_ATTACK_2
+	isHitboxDebug       bool     = false
+	arr_entities        []Entity = make([]Entity, 0)
 )
 
 // Background layers
@@ -50,18 +54,15 @@ var (
 	bg_layer_6          *rl.Texture2D
 	bg_layer_7          *rl.Texture2D
 	bg_layer_8          *rl.Texture2D
-	bg_layer_9          *rl.Texture2D
-	bg_layer_10         *rl.Texture2D
-	scrolling_backback  = 0
-	scrolling_back      = 0
-	scrolling_clouds    = 0
-	scrolling_backmid   = 0
-	scrolling_mid       = 0
-	scrolling_midmid    = 0
-	scrolling_midmidmid = 0
-	scrolling_midfore   = 0
-	scrolling_fore      = 0
-	scrolling_forefore  = 0
+	scrolling_back      float32 = 0.0
+	scrolling_clouds    float32 = 0.0
+	scrolling_backmid   float32 = 0.0
+	scrolling_mid       float32 = 0.0
+	scrolling_midmid    float32 = 0.0
+	scrolling_midmidmid float32 = 0.0
+	scrolling_midfore   float32 = 0.0
+	scrolling_fore      float32 = 0.0
+	scrolling_forefore  float32 = 0.0
 )
 
 // Constants
@@ -94,7 +95,7 @@ func main() {
 		app.Draw()
 
 		rl.EndDrawing()
-		if app.frameCount%500 == 0 {
+		if frameCount%500 == 0 {
 			runtime.GC()
 		}
 	}
@@ -103,6 +104,8 @@ func main() {
 func (a *App) Setup() {
 	// Set target FPS
 	rl.SetTargetFPS(60)
+
+	rl.SetTraceLogLevel(rl.LogError)
 
 	// Load sprites for background
 	bg_layer_0 = get_texture(backgroundSprites[0])
@@ -118,36 +121,36 @@ func (a *App) Setup() {
 
 func (a *App) Update() {
 	// Update app frame count
-	a.frameCount++
+	frameCount++
 
-	// Check player input
+	// Check player input for character movement
 	if Player.isAttacking {
-		if Player.attackType == ATTACK_LIGHT && animationPhase < len(playerSprites[ATTACK_ANIM])-1 {
+		if Player.attackType == ATTACK_LIGHT && Player.animation_phase < len(sprite_table[Player.sprite_set][ATTACK_ANIM])-1 {
 			a.play_attack_animation()
-		} else if Player.attackType == ATTACK_LIGHT_BACK && animationPhase < len(playerSprites[ATTACK2_ANIM])-1 {
+		} else if Player.attackType == ATTACK_LIGHT_BACK && Player.animation_phase < len(sprite_table[Player.sprite_set][ATTACK2_ANIM])-1 {
 			a.play_attack_animation()
-		} else if Player.attackType == ATTACK_HEAVY && animationPhase < len(playerSprites[ATTACK3_ANIM])-1 {
+		} else if Player.attackType == ATTACK_HEAVY && Player.animation_phase < len(sprite_table[Player.sprite_set][ATTACK3_ANIM])-1 {
 			a.play_attack_animation()
 		} else if betweenAttacksTimer > 0 {
 			if rl.IsMouseButtonDown(rl.MouseButtonLeft) && Player.attackType != ATTACK_LIGHT_BACK {
 				Player.attackType = ATTACK_LIGHT_BACK
-				a.reset_for_animation()
+				reset_for_animation()
 				a.play_attack_animation()
 			}
 			betweenAttacksTimer -= 1 * deltaTime
 		} else {
 			Player.isAttacking = false
-			a.reset_for_animation()
+			reset_for_animation()
 			Player.attackType = ATTACK_NONE
 			betweenAttacksTimer = TIME_FOR_ATTACK_2
 		}
 	} else if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		Player.attackType = ATTACK_LIGHT
-		a.frameCount = 0
+		frameCount = 0
 		Player.isAttacking = true
 	} else if rl.IsMouseButtonPressed(rl.MouseButtonRight) {
 		Player.attackType = ATTACK_HEAVY
-		a.reset_for_animation()
+		reset_for_animation()
 		Player.isAttacking = true
 	} else if rl.IsKeyDown(rl.KeyA) {
 		a.run_left()
@@ -157,25 +160,42 @@ func (a *App) Update() {
 		Player.isRunnging = false
 		Player.isAttacking = false
 	}
+	if rl.IsKeyDown(rl.KeyLeftShift) && !Player.isAttacking {
+		Player.current_speed = Player.sprint_speed
+	} else {
+		Player.current_speed = Player.speed
+	}
 
+	// Check player input for debug
+	if rl.IsKeyPressed(rl.KeyF1) { // Show hitboxes
+		isHitboxDebug = !isHitboxDebug
+	}
+	if rl.IsKeyPressed(rl.KeyO) { // Add new entity to entity list
+		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -50, Width: 44, Height: 44}, ENEMY, 1, 6)
+	}
+	if rl.IsKeyPressed(rl.KeyL) {
+		arr_entities = []Entity{}
+	}
+
+	// Reset / idle player when not doing anything
 	if !Player.isRunnging && !Player.isAttacking {
 		a.idle_player()
 	}
 
+	// Constantly update hitboxes to keep up with entity transform
+	udpate_hitbox(&Player)
+
 	// Debug print output
-	fmt.Print("\033[H\033[2J")
-	PrintMemUsage()
-	fmt.Printf("Player position: x {%f} y{%f} \n", Player.transform.X, Player.transform.Y)
-	fmt.Printf("Player world position: x: {%f} y: {%f}\n", Player.world_position.X, Player.world_position.Y)
-	println("Player is using attack: ", Player.attackType)
-	println("Player is attacking: ", Player.isAttacking)
-	println("Player is running: ", Player.isRunnging)
-	println("Animation phase: ", animationPhase)
-	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
+	print_debug_info()
 }
 
 func (a *App) Draw() {
 	draw_background()
+
+	// Draw entities
+	for entity := range arr_entities {
+		arr_entities[entity].draw()
+	}
 
 	// Draw the player sprite
 	if Player.isFacingRight {
@@ -184,10 +204,18 @@ func (a *App) Draw() {
 		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: -Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
 	}
 
+	if isHitboxDebug {
+		rl.DrawRectangleRoundedLines(Player.hitbox, 0, 0, 1, rl.Red)
+		for index := range arr_entities {
+			rl.DrawRectangleLines(int32(arr_entities[index].world_position.X), int32(arr_entities[index].world_position.Y), int32(arr_entities[index].transform.Width), int32(arr_entities[index].transform.Height), rl.Red)
+		}
+	}
+
+	// Smoothly move clouds constantly
 	scrolling_clouds += 1
 
 	// Draw foreground over player
-	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_6.Width), Height: float32(bg_layer_6.Height)}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_6.Width), Height: float32(bg_layer_6.Height)}, rl.Vector2{X: 0, Y: 50}, color.RGBA{255, 255, 255, 255})
 
 	// Draw fps for debugging
 	rl.DrawFPS(10, 10)
@@ -195,40 +223,52 @@ func (a *App) Draw() {
 
 // Player specific behaviours
 func (a *App) idle_player() {
-	sprite := a.get_anim_sprite(IDLE_ANIM, 8)
+	Player.state = IDLE_ANIM
+	sprite := get_anim_sprite(&Player, 8)
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
 	Player.sprite = sprite
 }
 func (a *App) run_left() {
-	Player.world_position.X -= Player.speed
+	Player.state = RUN_ANIM
+	Player.world_position.X -= Player.current_speed
 	Player.isRunnging = true
 	Player.isFacingRight = false
-	scroll_background(false)
-	sprite := a.get_anim_sprite(RUN_ANIM, 100/int(Player.speed))
+	sprite := get_anim_sprite(&Player, 100/int(Player.current_speed))
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
 	Player.sprite = sprite
+	scroll_background(-1)
 }
 func (a *App) run_right() {
-	Player.world_position.X += Player.speed
+	Player.state = RUN_ANIM
+	Player.world_position.X += Player.current_speed
 	Player.isRunnging = true
 	Player.isFacingRight = true
-	scroll_background(true)
-	sprite := a.get_anim_sprite(RUN_ANIM, 100/int(Player.speed))
+	sprite := get_anim_sprite(&Player, 100/int(Player.current_speed))
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
 	Player.sprite = sprite
+	scroll_background(1)
+}
+func udpate_hitbox(entity *Entity) {
+	entity.hitbox.Width = float32(entity.sprite.Width)
+	entity.hitbox.Height = float32(entity.sprite.Height)
+	entity.hitbox.X = Player.transform.X
+	entity.hitbox.Y = Player.transform.Y
 }
 func (a *App) play_attack_animation() {
 	sprite := rl.Texture2D{}
 	switch Player.attackType {
 	case ATTACK_LIGHT:
-		sprite = *a.get_anim_sprite(ATTACK_ANIM, 4)
+		Player.state = ATTACK_ANIM
+		sprite = *get_anim_sprite(&Player, 4)
 	case ATTACK_LIGHT_BACK:
-		sprite = *a.get_anim_sprite(ATTACK2_ANIM, 2)
+		Player.state = ATTACK2_ANIM
+		sprite = *get_anim_sprite(&Player, 2)
 	case ATTACK_HEAVY:
-		sprite = *a.get_anim_sprite(ATTACK3_ANIM, 4)
+		Player.state = ATTACK3_ANIM
+		sprite = *get_anim_sprite(&Player, 4)
 	}
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
@@ -274,7 +314,7 @@ func draw_background() {
 	bg_layer_8.Width = int32(windowSize.X)
 	bg_layer_8.Height = int32(windowSize.Y)
 
-	rl.DrawTextureRec(*bg_layer_0, rl.Rectangle{X: float32(scrolling_backback), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
+	rl.DrawTextureRec(*bg_layer_0, rl.Rectangle{X: 0, Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 	rl.DrawTextureRec(*bg_layer_1, rl.Rectangle{X: float32(scrolling_back), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 	rl.DrawTextureRec(*bg_layer_2, rl.Rectangle{X: float32(scrolling_clouds), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 	rl.DrawTextureRec(*bg_layer_3, rl.Rectangle{X: float32(scrolling_backmid), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
@@ -283,20 +323,15 @@ func draw_background() {
 	rl.DrawTextureRec(*bg_layer_6, rl.Rectangle{X: float32(scrolling_midmidmid), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 	rl.DrawTextureRec(*bg_layer_7, rl.Rectangle{X: float32(scrolling_midfore), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 }
-func scroll_background(is_right bool) {
-	scroll_factor := -1
-	if is_right {
-		scroll_factor = 1
-	}
-	scrolling_backback += 1 * scroll_factor
-	scrolling_back += 2 * scroll_factor
-	scrolling_backmid += 3 * scroll_factor
-	scrolling_mid += 4 * scroll_factor
-	scrolling_midmid += 5 * scroll_factor
-	scrolling_midmidmid += 6 * scroll_factor
-	scrolling_midfore += 7 * scroll_factor
-	scrolling_fore += int(Player.speed*15*deltaTime) * scroll_factor
-	scrolling_forefore += int(Player.speed*30*deltaTime) * scroll_factor
+func scroll_background(scroll_factor float32) {
+	scrolling_back += Player.current_speed / 20 * scroll_factor
+	scrolling_backmid += (Player.current_speed / 12) * scroll_factor
+	scrolling_mid += (Player.current_speed / 6) * scroll_factor
+	scrolling_midmid += (Player.current_speed / 5) * scroll_factor
+	scrolling_midmidmid += (Player.current_speed / 4) * scroll_factor
+	scrolling_midfore += (Player.current_speed / 3) * scroll_factor
+	scrolling_fore += (Player.current_speed / 2) * scroll_factor
+	scrolling_forefore += (Player.current_speed) * scroll_factor
 }
 
 // Utility functions
@@ -304,9 +339,9 @@ func get_texture(sprite *rl.Image) *rl.Texture2D {
 	result := rl.LoadTextureFromImage(sprite)
 	return &result
 }
-func (a *App) reset_for_animation() {
-	animationPhase = 0
-	a.frameCount = 0
+func reset_for_animation() {
+	Player.animation_phase = 0
+	frameCount = 0
 }
 func PrintMemUsage() {
 	var m runtime.MemStats
@@ -318,4 +353,48 @@ func PrintMemUsage() {
 }
 func bToMb(b uint64) float32 {
 	return float32(b) / 1024.0 / 1024.0
+}
+func print_debug_info() {
+	fmt.Print("\033[H\033[2J")
+	PrintMemUsage()
+	fmt.Printf("Player position: x {%f} y{%f} \n", Player.transform.X, Player.transform.Y)
+	fmt.Printf("Player world position: x: {%f} y: {%f}\n", Player.world_position.X, Player.world_position.Y)
+	println("Player is using attack: ", Player.attackType)
+	println("Player is attacking: ", Player.isAttacking)
+	println("Player is running: ", Player.isRunnging)
+	println("Player animation_phase: ", Player.animation_phase)
+	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
+	println("Entities array length: ", len(arr_entities))
+	// fmt.Printf("Entites array:  %+v", arr_entities)
+}
+
+// Engine logic
+func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, sprite_set int, scale int) Entity {
+	// Make the entity face the player
+	is_facing_right := true
+	if transform.X >= Player.world_position.X {
+		is_facing_right = false
+	}
+
+	transform.Width *= float32(scale)
+	transform.Height *= float32(scale)
+	transform.Y += windowSize.Y - transform.Height
+
+	new_entity := Entity{
+		name:           name,
+		transform:      transform,
+		world_position: rl.Vector2{X: transform.X, Y: transform.Y},
+		speed:          5,
+		scale:          float32(scale),
+		sprite:         nil,
+		isFacingRight:  is_facing_right,
+		sprite_set:     sprite_set,
+		entity_type:    entity_type,
+		state:          IDLE_ANIM,
+	}
+	arr_entities = append(arr_entities, new_entity)
+	return new_entity
+}
+func kill_entity() {
+	// Kill an entity
 }
