@@ -35,12 +35,13 @@ var (
 		sprite:         nil,
 		sprite_set:     0,
 		entity_type:    PLAYER,
-		hitbox:         rl.Rectangle{X: windowSize.X/4 + (33 * 5 / 4), Y: windowSize.Y - (33 * 6), Width: (33 * 5) / 2, Height: 33 * 5},
+		hitbox:         rl.Rectangle{X: windowSize.X/4 + (33 * 5 / 4), Y: windowSize.Y - (33*5 - 50), Width: (33 * 2), Height: 33 * 5},
 	}
 	deltaTime           float32  = 0
 	betweenAttacksTimer float32  = TIME_FOR_ATTACK_2
 	isHitboxDebug       bool     = false
 	arr_entities        []Entity = make([]Entity, 0)
+	is_fullscreen       bool     = false
 )
 
 // Background layers
@@ -77,15 +78,25 @@ const (
 
 func main() {
 	app := App{}
+	// Make window resizable
+	// rl.SetConfigFlags(rl.FlagWindowResizable)
 	rl.InitWindow(int32(windowSize.X), int32(windowSize.Y), "Demon Slayer")
 	defer rl.CloseWindow()
 
+	setup_audio()
+
+	// Play music
+	rl.PlayMusicStream(BG_MUSIC)
+
+	// Runs one time by start of the game
 	app.Setup()
 
 	// Main loop for window / game
 	for !rl.WindowShouldClose() {
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.RayWhite)
+
+		rl.UpdateMusicStream(BG_MUSIC)
 
 		// Update deltaTime
 		deltaTime = 1.0 / float32(rl.GetFPS())
@@ -95,7 +106,7 @@ func main() {
 		app.Draw()
 
 		rl.EndDrawing()
-		if frameCount%500 == 0 {
+		if frameCount%1000 == 0 {
 			runtime.GC()
 		}
 	}
@@ -104,8 +115,12 @@ func main() {
 func (a *App) Setup() {
 	// Set target FPS
 	rl.SetTargetFPS(60)
+	// Set log level to disable unneccessary output
+	rl.SetTraceLogLevel(rl.LogInfo)
 
-	rl.SetTraceLogLevel(rl.LogError)
+	// Set initial window size
+	windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor())) / 2
+	windowSize.Y = float32(rl.GetMonitorHeight(rl.GetCurrentMonitor())) / 2
 
 	// Load sprites for background
 	bg_layer_0 = get_texture(backgroundSprites[0])
@@ -120,7 +135,7 @@ func (a *App) Setup() {
 }
 
 func (a *App) Update() {
-	// Update app frame count
+	// Update app frame count: important for animations
 	frameCount++
 
 	// Check player input for character movement
@@ -136,21 +151,24 @@ func (a *App) Update() {
 				Player.attackType = ATTACK_LIGHT_BACK
 				reset_for_animation()
 				a.play_attack_animation()
+				rl.PlaySound(SWING)
 			}
 			betweenAttacksTimer -= 1 * deltaTime
 		} else {
-			Player.isAttacking = false
 			reset_for_animation()
+			Player.isAttacking = false
 			Player.attackType = ATTACK_NONE
 			betweenAttacksTimer = TIME_FOR_ATTACK_2
 		}
 	} else if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		reset_for_animation()
 		Player.attackType = ATTACK_LIGHT
-		frameCount = 0
+		rl.PlaySound(SWING)
 		Player.isAttacking = true
 	} else if rl.IsMouseButtonPressed(rl.MouseButtonRight) {
-		Player.attackType = ATTACK_HEAVY
 		reset_for_animation()
+		Player.attackType = ATTACK_HEAVY
+		rl.PlaySound(SLASH_STRONG)
 		Player.isAttacking = true
 	} else if rl.IsKeyDown(rl.KeyA) {
 		a.run_left()
@@ -174,7 +192,17 @@ func (a *App) Update() {
 		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -50, Width: 44, Height: 44}, ENEMY, 1, 6)
 	}
 	if rl.IsKeyPressed(rl.KeyL) {
+		// Clear list of entities
 		arr_entities = []Entity{}
+	}
+
+	// Check player input for some stuff
+	// if rl.IsKeyPressed(rl.KeyF11) {
+	// 	toggle_fullscreen()
+	// }
+
+	for index := range arr_entities {
+		arr_entities[index].update()
 	}
 
 	// Reset / idle player when not doing anything
@@ -182,11 +210,11 @@ func (a *App) Update() {
 		a.idle_player()
 	}
 
-	// Constantly update hitboxes to keep up with entity transform
-	udpate_hitbox(&Player)
+	// Constantly update player hitbox to keep up with player transform
+	Player.update_hitbox()
 
 	// Debug print output
-	print_debug_info()
+	// print_debug_info()
 }
 
 func (a *App) Draw() {
@@ -204,6 +232,7 @@ func (a *App) Draw() {
 		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: -Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
 	}
 
+	// Draw lines to visualize the hitbox for debugging
 	if isHitboxDebug {
 		rl.DrawRectangleRoundedLines(Player.hitbox, 0, 0, 1, rl.Red)
 		for index := range arr_entities {
@@ -223,6 +252,7 @@ func (a *App) Draw() {
 
 // Player specific behaviours
 func (a *App) idle_player() {
+	rl.StopSound(GRASS_RUNNING)
 	Player.state = IDLE_ANIM
 	sprite := get_anim_sprite(&Player, 8)
 	sprite.Width = Player.transform.ToInt32().Width
@@ -230,6 +260,9 @@ func (a *App) idle_player() {
 	Player.sprite = sprite
 }
 func (a *App) run_left() {
+	if !rl.IsSoundPlaying(GRASS_RUNNING) {
+		rl.PlaySound(GRASS_RUNNING)
+	}
 	Player.state = RUN_ANIM
 	Player.world_position.X -= Player.current_speed
 	Player.isRunnging = true
@@ -241,6 +274,9 @@ func (a *App) run_left() {
 	scroll_background(-1)
 }
 func (a *App) run_right() {
+	if !rl.IsSoundPlaying(GRASS_RUNNING) {
+		rl.PlaySound(GRASS_RUNNING)
+	}
 	Player.state = RUN_ANIM
 	Player.world_position.X += Player.current_speed
 	Player.isRunnging = true
@@ -251,12 +287,6 @@ func (a *App) run_right() {
 	Player.sprite = sprite
 	scroll_background(1)
 }
-func udpate_hitbox(entity *Entity) {
-	entity.hitbox.Width = float32(entity.sprite.Width)
-	entity.hitbox.Height = float32(entity.sprite.Height)
-	entity.hitbox.X = Player.transform.X
-	entity.hitbox.Y = Player.transform.Y
-}
 func (a *App) play_attack_animation() {
 	sprite := rl.Texture2D{}
 	switch Player.attackType {
@@ -265,7 +295,7 @@ func (a *App) play_attack_animation() {
 		sprite = *get_anim_sprite(&Player, 4)
 	case ATTACK_LIGHT_BACK:
 		Player.state = ATTACK2_ANIM
-		sprite = *get_anim_sprite(&Player, 2)
+		sprite = *get_anim_sprite(&Player, 3)
 	case ATTACK_HEAVY:
 		Player.state = ATTACK3_ANIM
 		sprite = *get_anim_sprite(&Player, 4)
@@ -295,6 +325,8 @@ func draw_background() {
 		scrolling_forefore = 0
 	}
 
+	// Unfortunately we have to do this so the background
+	// is scaled properly to cover the window
 	bg_layer_0.Width = int32(windowSize.X)
 	bg_layer_0.Height = int32(windowSize.Y)
 	bg_layer_1.Width = int32(windowSize.X)
@@ -365,10 +397,44 @@ func print_debug_info() {
 	println("Player animation_phase: ", Player.animation_phase)
 	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
 	println("Entities array length: ", len(arr_entities))
+	println("Is audio device ready: ", rl.IsAudioDeviceReady())
 	// fmt.Printf("Entites array:  %+v", arr_entities)
 }
 
+// func toggle_fullscreen() {
+// 	if !is_fullscreen {
+// 		// rl.MaximizeWindow()
+// 		windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor()))
+// 		windowSize.Y = float32(rl.GetMonitorHeight(rl.GetCurrentMonitor()))
+// 		Player.scale = 9
+// 		rl.MaximizeWindow()
+// 		// rl.ToggleFullscreen()
+// 		// rl.SetWindowSize(int(windowSize.X), int(windowSize.Y))
+// 	} else {
+// 		windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor())) / 2
+// 		windowSize.Y = float32(rl.GetMonitorHeight(rl.GetCurrentMonitor())) / 2
+// 		Player.scale = 5
+// 		rl.SetWindowSize(int(windowSize.X), int(windowSize.Y))
+// 	}
+// 	// Update player position
+// 	Player.transform.Width = (33 * Player.scale)
+// 	Player.transform.Height = (33 * Player.scale)
+// 	Player.transform.Y = windowSize.Y - Player.transform.Height - 100
+// 	is_fullscreen = !is_fullscreen
+// }
+
 // Engine logic
+func setup_audio() {
+	// Init audio
+	rl.InitAudioDevice()
+	// Load background music
+	BG_MUSIC = rl.LoadMusicStream("assets/sounds/background-music.mp3")
+	// Load player sounds
+	SLASH = rl.LoadSound("assets/sounds/slash.wav")
+	SWING = rl.LoadSound("assets/sounds/swing.wav")
+	SLASH_STRONG = rl.LoadSound("assets/sounds/slash_strong.wav")
+	GRASS_RUNNING = rl.LoadSound("assets/sounds/grass_running.wav")
+}
 func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, sprite_set int, scale int) Entity {
 	// Make the entity face the player
 	is_facing_right := true
@@ -396,5 +462,5 @@ func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, s
 	return new_entity
 }
 func kill_entity() {
-	// Kill an entity
+	// TODO: Impl kill an entity
 }

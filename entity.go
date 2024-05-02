@@ -40,6 +40,11 @@ type Entity struct {
 	hitbox          rl.Rectangle
 }
 
+func (e *Entity) update() {
+	// Update hitbox to keep up with entity transform
+	e.update_hitbox()
+}
+
 func (e *Entity) draw() {
 
 	// Change the position of the entity relative to the players world position
@@ -62,6 +67,15 @@ func (e *Entity) draw() {
 		rl.DrawTextureRec(*e.sprite, rl.Rectangle{X: 0, Y: 0, Width: -e.transform.Width, Height: e.transform.Height}, e.world_position, rl.White)
 	}
 
-	// Draw entity name centered over head
-	rl.DrawText(e.name, int32(e.world_position.X+float32(rl.MeasureText(e.name, 20))+(e.transform.Width/6)), int32(e.world_position.Y), 20, rl.Red)
+	if isHitboxDebug {
+		// Draw entity name centered over head
+		rl.DrawText(e.name, int32(e.world_position.X+float32(rl.MeasureText(e.name, 20))+(e.transform.Width/6)), int32(e.world_position.Y), 20, rl.Red)
+	}
+}
+
+func (e *Entity) update_hitbox() {
+	e.hitbox.Width = float32(e.transform.Width) / 2
+	e.hitbox.X = e.transform.X + e.hitbox.Width/2
+	e.hitbox.Height = float32(e.transform.Height)
+	e.hitbox.Y = e.transform.Y
 }
