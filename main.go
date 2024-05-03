@@ -86,7 +86,7 @@ func main() {
 	setup_audio()
 
 	// Play music
-	rl.PlayMusicStream(BG_MUSIC)
+	// rl.PlayMusicStream(BG_MUSIC)
 
 	// Runs one time by start of the game
 	app.Setup()
@@ -116,7 +116,7 @@ func (a *App) Setup() {
 	// Set target FPS
 	rl.SetTargetFPS(60)
 	// Set log level to disable unneccessary output
-	rl.SetTraceLogLevel(rl.LogInfo)
+	rl.SetTraceLogLevel(rl.LogError)
 
 	// Set initial window size
 	windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor())) / 2
@@ -189,7 +189,7 @@ func (a *App) Update() {
 		isHitboxDebug = !isHitboxDebug
 	}
 	if rl.IsKeyPressed(rl.KeyO) { // Add new entity to entity list
-		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -50, Width: 44, Height: 44}, ENEMY, 1, 6)
+		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -50, Width: 44, Height: 44}, DEMON, 1, 6)
 	}
 	if rl.IsKeyPressed(rl.KeyL) {
 		// Clear list of entities
@@ -214,7 +214,7 @@ func (a *App) Update() {
 	Player.update_hitbox()
 
 	// Debug print output
-	// print_debug_info()
+	print_debug_info()
 }
 
 func (a *App) Draw() {
@@ -234,9 +234,11 @@ func (a *App) Draw() {
 
 	// Draw lines to visualize the hitbox for debugging
 	if isHitboxDebug {
+		// Player hitbox
 		rl.DrawRectangleRoundedLines(Player.hitbox, 0, 0, 1, rl.Red)
+		// Entities hitboxes
 		for index := range arr_entities {
-			rl.DrawRectangleLines(int32(arr_entities[index].world_position.X), int32(arr_entities[index].world_position.Y), int32(arr_entities[index].transform.Width), int32(arr_entities[index].transform.Height), rl.Red)
+			rl.DrawRectangleLines(int32(arr_entities[index].hitbox.X), int32(arr_entities[index].hitbox.Y), int32(arr_entities[index].hitbox.Width), int32(arr_entities[index].hitbox.Height), rl.Red)
 		}
 	}
 
@@ -391,6 +393,7 @@ func print_debug_info() {
 	PrintMemUsage()
 	fmt.Printf("Player position: x {%f} y{%f} \n", Player.transform.X, Player.transform.Y)
 	fmt.Printf("Player world position: x: {%f} y: {%f}\n", Player.world_position.X, Player.world_position.Y)
+	fmt.Printf("Player hitbox %v", Player.hitbox)
 	println("Player is using attack: ", Player.attackType)
 	println("Player is attacking: ", Player.isAttacking)
 	println("Player is running: ", Player.isRunnging)
@@ -398,7 +401,7 @@ func print_debug_info() {
 	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
 	println("Entities array length: ", len(arr_entities))
 	println("Is audio device ready: ", rl.IsAudioDeviceReady())
-	// fmt.Printf("Entites array:  %+v", arr_entities)
+	fmt.Printf("Entites array:  %+v", arr_entities)
 }
 
 // func toggle_fullscreen() {
@@ -457,6 +460,7 @@ func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, s
 		sprite_set:     sprite_set,
 		entity_type:    entity_type,
 		state:          IDLE_ANIM,
+		is_colliding:   false,
 	}
 	arr_entities = append(arr_entities, new_entity)
 	return new_entity
