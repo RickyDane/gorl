@@ -1,9 +1,12 @@
 package main
 
 import (
+	"container/list"
 	"fmt"
 	"image/color"
+	"math/rand"
 	"runtime"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -18,6 +21,10 @@ var (
 		Y: 720,
 	}
 	Player = Entity{
+		id:            int64(rl.GetRandomValue(0, 100000)),
+		name:          "Player",
+		health:        100,
+		attack_damage: 10,
 		transform: rl.Rectangle{
 			X:      windowSize.X / 4,
 			Y:      windowSize.Y - (33 * 5) - 50,
@@ -37,11 +44,12 @@ var (
 		entity_type:    PLAYER,
 		hitbox:         rl.Rectangle{X: windowSize.X/4 + (33 * 5 / 4), Y: windowSize.Y - (33*5 - 50), Width: (33 * 2), Height: 33 * 5},
 	}
-	deltaTime           float32  = 0
-	betweenAttacksTimer float32  = TIME_FOR_ATTACK_2
-	isHitboxDebug       bool     = false
-	arr_entities        []Entity = make([]Entity, 0)
-	is_fullscreen       bool     = false
+	deltaTime           float32    = 0
+	betweenAttacksTimer float32    = TIME_FOR_ATTACK_2
+	isHitboxDebug       bool       = false
+	arr_entities        []*Entity  = make([]*Entity, 0)
+	ls_entities         *list.List = list.New()
+	is_fullscreen       bool       = false
 )
 
 // Background layers
@@ -93,16 +101,16 @@ func main() {
 
 	// Main loop for window / game
 	for !rl.WindowShouldClose() {
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.RayWhite)
-
-		rl.UpdateMusicStream(BG_MUSIC)
-
 		// Update deltaTime
 		deltaTime = 1.0 / float32(rl.GetFPS())
 
-		// Call respective methods for udpating and drawing
 		app.Update()
+		rl.UpdateMusicStream(BG_MUSIC)
+
+		rl.BeginDrawing()
+		rl.ClearBackground(rl.RayWhite)
+
+		// Call respective methods for udpating and drawing
 		app.Draw()
 
 		rl.EndDrawing()
@@ -152,13 +160,21 @@ func (a *App) Update() {
 				reset_for_animation()
 				a.play_attack_animation()
 				rl.PlaySound(SWING)
+				attack(Player.attack_damage)
 			}
 			betweenAttacksTimer -= 1 * deltaTime
 		} else {
 			reset_for_animation()
 			Player.isAttacking = false
-			Player.attackType = ATTACK_NONE
 			betweenAttacksTimer = TIME_FOR_ATTACK_2
+			if pt_chance(0.75) && Player.attackType == ATTACK_HEAVY {
+				attack(Player.attack_damage * 3)
+			} else if Player.attackType == ATTACK_HEAVY {
+				attack(Player.attack_damage * 1.5)
+			} else {
+				attack(Player.attack_damage)
+			}
+			Player.attackType = ATTACK_NONE
 		}
 	} else if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		reset_for_animation()
@@ -189,11 +205,11 @@ func (a *App) Update() {
 		isHitboxDebug = !isHitboxDebug
 	}
 	if rl.IsKeyPressed(rl.KeyO) { // Add new entity to entity list
-		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -50, Width: 44, Height: 44}, DEMON, 1, 6)
+		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -25, Width: 44, Height: 44}, DEMON, 1, 8)
 	}
 	if rl.IsKeyPressed(rl.KeyL) {
 		// Clear list of entities
-		arr_entities = []Entity{}
+		arr_entities = []*Entity{}
 	}
 
 	// Check player input for some stuff
@@ -201,28 +217,27 @@ func (a *App) Update() {
 	// 	toggle_fullscreen()
 	// }
 
-	for index := range arr_entities {
-		arr_entities[index].update()
+	for element := ls_entities.Front(); element != nil; element = element.Next() {
+		element.Value.(*Entity).update()
 	}
 
 	// Reset / idle player when not doing anything
 	if !Player.isRunnging && !Player.isAttacking {
+		// Constantly update player hitbox to keep up with player transform
+		Player.update_hitbox()
 		a.idle_player()
 	}
 
-	// Constantly update player hitbox to keep up with player transform
-	Player.update_hitbox()
-
 	// Debug print output
-	print_debug_info()
+	// print_debug_info()
 }
 
 func (a *App) Draw() {
 	draw_background()
 
 	// Draw entities
-	for entity := range arr_entities {
-		arr_entities[entity].draw()
+	for element := ls_entities.Front(); element != nil; element = element.Next() {
+		element.Value.(*Entity).draw()
 	}
 
 	// Draw the player sprite
@@ -237,8 +252,9 @@ func (a *App) Draw() {
 		// Player hitbox
 		rl.DrawRectangleRoundedLines(Player.hitbox, 0, 0, 1, rl.Red)
 		// Entities hitboxes
-		for index := range arr_entities {
-			rl.DrawRectangleLines(int32(arr_entities[index].hitbox.X), int32(arr_entities[index].hitbox.Y), int32(arr_entities[index].hitbox.Width), int32(arr_entities[index].hitbox.Height), rl.Red)
+		for element := ls_entities.Front(); element != nil; element = element.Next() {
+			entity := element.Value.(*Entity)
+			rl.DrawRectangleLines(int32(entity.hitbox.X), int32(entity.hitbox.Y), int32(entity.hitbox.Width), int32(entity.hitbox.Height), rl.Red)
 		}
 	}
 
@@ -259,7 +275,11 @@ func (a *App) idle_player() {
 	sprite := get_anim_sprite(&Player, 8)
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
+	if Player.sprite != nil {
+		rl.UnloadTexture(*Player.sprite)
+	}
 	Player.sprite = sprite
+	Player.hitbox.Width = 50
 }
 func (a *App) run_left() {
 	if !rl.IsSoundPlaying(GRASS_RUNNING) {
@@ -272,6 +292,7 @@ func (a *App) run_left() {
 	sprite := get_anim_sprite(&Player, 100/int(Player.current_speed))
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
+	rl.UnloadTexture(*Player.sprite)
 	Player.sprite = sprite
 	scroll_background(-1)
 }
@@ -286,6 +307,7 @@ func (a *App) run_right() {
 	sprite := get_anim_sprite(&Player, 100/int(Player.current_speed))
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
+	rl.UnloadTexture(*Player.sprite)
 	Player.sprite = sprite
 	scroll_background(1)
 }
@@ -300,11 +322,34 @@ func (a *App) play_attack_animation() {
 		sprite = *get_anim_sprite(&Player, 3)
 	case ATTACK_HEAVY:
 		Player.state = ATTACK3_ANIM
-		sprite = *get_anim_sprite(&Player, 4)
+		sprite = *get_anim_sprite(&Player, 6)
 	}
 	sprite.Width = Player.transform.ToInt32().Width
 	sprite.Height = Player.transform.ToInt32().Height
+	rl.UnloadTexture(*Player.sprite)
 	Player.sprite = &sprite
+	if Player.isFacingRight {
+		Player.hitbox.Width = 100
+		Player.hitbox.X = Player.transform.X + 100/2
+	} else {
+		Player.hitbox.X = Player.transform.X
+		Player.hitbox.Width = 100
+	}
+
+}
+func attack(attack_damage float32) {
+	for element := ls_entities.Front(); element != nil; element = element.Next() {
+		element := element.Value.(*Entity)
+		if is_entity_colliding(Player, *element) {
+			element.was_hit = true
+			element.health -= attack_damage
+			if element.health <= 0 {
+				kill_entity(element)
+				attack(attack_damage)
+				break
+			}
+		}
+	}
 }
 
 func draw_background() {
@@ -399,11 +444,26 @@ func print_debug_info() {
 	println("Player is running: ", Player.isRunnging)
 	println("Player animation_phase: ", Player.animation_phase)
 	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
-	println("Entities array length: ", len(arr_entities))
 	println("Is audio device ready: ", rl.IsAudioDeviceReady())
-	fmt.Printf("Entites array:  %+v", arr_entities)
+	println("Entities array length: ", len(arr_entities))
+	println("Entities list length", ls_entities.Len())
+	// fmt.Printf("Entites array:  %+v", arr_entities)
+}
+func contains(list list.List, target any) bool {
+	for item := list.Front(); item != nil; item = list.Back().Next() {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+func pt_chance(percentage float32) bool {
+	_rand := rand.New(rand.NewSource(time.Now().UnixMicro()))
+	randomNumber := _rand.Intn(100) + 1
+	return randomNumber <= int(percentage)
 }
 
+// Current not in use or worked on
 // func toggle_fullscreen() {
 // 	if !is_fullscreen {
 // 		// rl.MaximizeWindow()
@@ -450,7 +510,10 @@ func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, s
 	transform.Y += windowSize.Y - transform.Height
 
 	new_entity := Entity{
+		id:             int64(rl.GetRandomValue(0, 100000)),
 		name:           name,
+		health:         100,
+		attack_damage:  10,
 		transform:      transform,
 		world_position: rl.Vector2{X: transform.X, Y: transform.Y},
 		speed:          5,
@@ -460,11 +523,37 @@ func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, s
 		sprite_set:     sprite_set,
 		entity_type:    entity_type,
 		state:          IDLE_ANIM,
+		hit_cooldown:   ENTITY_HIT_COOLDOWN,
 		is_colliding:   false,
 	}
-	arr_entities = append(arr_entities, new_entity)
+	arr_entities = append(arr_entities, &new_entity)
+	ls_entities.PushBack(&new_entity)
 	return new_entity
 }
-func kill_entity() {
-	// TODO: Impl kill an entity
+func kill_entity(entity *Entity) {
+	for element := ls_entities.Front(); element != nil; element = element.Next() {
+		if element.Value.(*Entity) == entity {
+			ls_entities.Remove(element)
+			fmt.Println("Killed entity")
+			break
+		}
+	}
+	// for index := range arr_entities {
+	// 	e := arr_entities[index]
+	// 	if e.id == entity.id {
+	// 		arr_entities = remove_copy(arr_entities, index)
+	// 		break
+	// 	}
+	// }
+}
+func is_entity_colliding(first_entity Entity, second_entity Entity) bool {
+	source_hitbox := first_entity.hitbox
+	target_hitbox := second_entity.hitbox
+	if target_hitbox.X+target_hitbox.Width >= source_hitbox.X && target_hitbox.X+target_hitbox.Width < source_hitbox.X+source_hitbox.Width {
+		return true
+	} else if source_hitbox.X+source_hitbox.Width >= target_hitbox.X && source_hitbox.X+source_hitbox.Width < target_hitbox.X+target_hitbox.Width {
+		return true
+	} else {
+		return false
+	}
 }
