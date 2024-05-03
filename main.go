@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	"image/color"
+	"math"
 	"math/rand"
 	"runtime"
 	"time"
@@ -15,12 +16,16 @@ type App struct{}
 
 // Global variables
 var (
-	frameCount int32
-	windowSize = rl.Vector2{
+	frameCount   int64
+	update_count int64
+	windowSize   = rl.Vector2{
 		X: 1280,
 		Y: 720,
 	}
-	Player = Entity{
+	scaled_width  float32 = 0
+	scaled_height float32 = 0
+	window_scale  float32 = 0
+	Player                = Entity{
 		id:            int64(rl.GetRandomValue(0, 100000)),
 		name:          "Player",
 		health:        100,
@@ -44,12 +49,13 @@ var (
 		entity_type:    PLAYER,
 		hitbox:         rl.Rectangle{X: windowSize.X/4 + (33 * 5 / 4), Y: windowSize.Y - (33*5 - 50), Width: (33 * 2), Height: 33 * 5},
 	}
-	deltaTime           float32    = 0
-	betweenAttacksTimer float32    = TIME_FOR_ATTACK_2
-	isHitboxDebug       bool       = false
-	arr_entities        []*Entity  = make([]*Entity, 0)
-	ls_entities         *list.List = list.New()
-	is_fullscreen       bool       = false
+	deltaTime             float32    = 0
+	betweenAttacksTimer   float32    = TIME_FOR_ATTACK_2
+	isHitboxDebug         bool       = false
+	arr_entities          []*Entity  = make([]*Entity, 0)
+	ls_entities           *list.List = list.New()
+	is_fullscreen         bool       = false
+	window_render_texture rl.RenderTexture2D
 )
 
 // Background layers
@@ -87,14 +93,9 @@ const (
 func main() {
 	app := App{}
 	// Make window resizable
-	// rl.SetConfigFlags(rl.FlagWindowResizable)
+	rl.SetConfigFlags(rl.FlagWindowResizable)
 	rl.InitWindow(int32(windowSize.X), int32(windowSize.Y), "Demon Slayer")
 	defer rl.CloseWindow()
-
-	setup_audio()
-
-	// Play music
-	// rl.PlayMusicStream(BG_MUSIC)
 
 	// Runs one time by start of the game
 	app.Setup()
@@ -102,22 +103,40 @@ func main() {
 	// Main loop for window / game
 	for !rl.WindowShouldClose() {
 		// Update deltaTime
-		deltaTime = 1.0 / float32(rl.GetFPS())
+		deltaTime = 1.0 / 60
 
+		// Main engine update method implementation
 		app.Update()
+
+		// Play background music with updating the stream buffer
 		rl.UpdateMusicStream(BG_MUSIC)
 
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.RayWhite)
-
-		// Call respective methods for udpating and drawing
+		// Draw game on texture
+		rl.BeginTextureMode(window_render_texture)
+		rl.ClearBackground(rl.White)
+		// Main engine draw method implementation
 		app.Draw()
+		rl.EndTextureMode()
 
+		// At the end draw the texture scaled to the window size
+		rl.BeginDrawing()
+		rl.ClearBackground(rl.Black)
+		rl.DrawTexturePro(
+			window_render_texture.Texture,
+			rl.Rectangle{X: 0, Y: 0, Width: float32(window_render_texture.Texture.Width), Height: float32(-window_render_texture.Texture.Height)},
+			rl.Rectangle{
+				X:      scaled_width - scaled_width/2,
+				Y:      scaled_height - scaled_height/2,
+				Width:  windowSize.X * window_scale,
+				Height: windowSize.Y * window_scale,
+			},
+			rl.Vector2{X: 0, Y: 0},
+			0,
+			rl.White,
+		)
 		rl.EndDrawing()
-		if frameCount%1000 == 0 {
-			runtime.GC()
-		}
 	}
+	rl.UnloadRenderTexture(window_render_texture)
 }
 
 func (a *App) Setup() {
@@ -126,9 +145,12 @@ func (a *App) Setup() {
 	// Set log level to disable unneccessary output
 	rl.SetTraceLogLevel(rl.LogError)
 
-	// Set initial window size
-	windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor())) / 2
-	windowSize.Y = float32(rl.GetMonitorHeight(rl.GetCurrentMonitor())) / 2
+	setup_audio()
+
+	// window_scale = float32(math.Min(float64(rl.GetScreenWidth())/float64(windowSize.X), float64(rl.GetScreenHeight())/float64(windowSize.Y)))
+	window_scale = float32(calculate_window(rl.GetScreenWidth(), rl.GetScreenHeight()))
+	window_render_texture = rl.LoadRenderTexture(int32(windowSize.X), int32(windowSize.Y))
+	rl.SetTextureFilter(window_render_texture.Texture, rl.FilterBilinear)
 
 	// Load sprites for background
 	bg_layer_0 = get_texture(backgroundSprites[0])
@@ -144,7 +166,18 @@ func (a *App) Setup() {
 
 func (a *App) Update() {
 	// Update app frame count: important for animations
+	// update_count++
+	// if rl.GetFPS()/60%60 == 0 {
+	// 	update_count = 0
+	// }
 	frameCount++
+	if frameCount >= 90 {
+		frameCount = 0
+	}
+
+	window_scale = float32(calculate_window(rl.GetRenderWidth(), rl.GetRenderHeight()))
+	scaled_width = float32(rl.GetRenderWidth()) - (windowSize.X * window_scale)
+	scaled_height = float32(rl.GetRenderHeight()) - (windowSize.Y * window_scale)
 
 	// Check player input for character movement
 	if Player.isAttacking {
@@ -213,9 +246,9 @@ func (a *App) Update() {
 	}
 
 	// Check player input for some stuff
-	// if rl.IsKeyPressed(rl.KeyF11) {
-	// 	toggle_fullscreen()
-	// }
+	if rl.IsKeyPressed(rl.KeyF11) {
+		toggle_fullscreen()
+	}
 
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		element.Value.(*Entity).update()
@@ -229,7 +262,7 @@ func (a *App) Update() {
 	}
 
 	// Debug print output
-	// print_debug_info()
+	print_debug_info()
 }
 
 func (a *App) Draw() {
@@ -262,7 +295,9 @@ func (a *App) Draw() {
 	scrolling_clouds += 1
 
 	// Draw foreground over player
-	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_6.Width), Height: float32(bg_layer_6.Height)}, rl.Vector2{X: 0, Y: 50}, color.RGBA{255, 255, 255, 255})
+	bg_layer_8.Width = int32(windowSize.X)
+	bg_layer_8.Height = int32(windowSize.Y)
+	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_8.Width), Height: float32(bg_layer_8.Height)}, rl.Vector2{X: 0, Y: 50}, color.RGBA{255, 255, 255, 255})
 
 	// Draw fps for debugging
 	rl.DrawFPS(10, 10)
@@ -374,6 +409,7 @@ func draw_background() {
 
 	// Unfortunately we have to do this so the background
 	// is scaled properly to cover the window
+	// TODO: Simplify to array?
 	bg_layer_0.Width = int32(windowSize.X)
 	bg_layer_0.Height = int32(windowSize.Y)
 	bg_layer_1.Width = int32(windowSize.X)
@@ -390,8 +426,6 @@ func draw_background() {
 	bg_layer_6.Height = int32(windowSize.Y)
 	bg_layer_7.Width = int32(windowSize.X)
 	bg_layer_7.Height = int32(windowSize.Y)
-	bg_layer_8.Width = int32(windowSize.X)
-	bg_layer_8.Height = int32(windowSize.Y)
 
 	rl.DrawTextureRec(*bg_layer_0, rl.Rectangle{X: 0, Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
 	rl.DrawTextureRec(*bg_layer_1, rl.Rectangle{X: float32(scrolling_back), Y: 0, Width: windowSize.X, Height: windowSize.Y}, rl.Vector2{X: 0, Y: 0}, color.RGBA{255, 255, 255, 255})
@@ -447,6 +481,11 @@ func print_debug_info() {
 	println("Is audio device ready: ", rl.IsAudioDeviceReady())
 	println("Entities array length: ", len(arr_entities))
 	println("Entities list length", ls_entities.Len())
+	fmt.Printf("Window width: %f height: %f\n", windowSize.X, windowSize.Y)
+	fmt.Printf("Window scale: %f\n", window_scale)
+	fmt.Printf("%f %f\n", scaled_width, scaled_height)
+	println("frameCount: ", frameCount)
+	println("update_count: ", update_count)
 	// fmt.Printf("Entites array:  %+v", arr_entities)
 }
 func contains(list list.List, target any) bool {
@@ -464,27 +503,36 @@ func pt_chance(percentage float32) bool {
 }
 
 // Current not in use or worked on
-// func toggle_fullscreen() {
-// 	if !is_fullscreen {
-// 		// rl.MaximizeWindow()
-// 		windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor()))
-// 		windowSize.Y = float32(rl.GetMonitorHeight(rl.GetCurrentMonitor()))
-// 		Player.scale = 9
-// 		rl.MaximizeWindow()
-// 		// rl.ToggleFullscreen()
-// 		// rl.SetWindowSize(int(windowSize.X), int(windowSize.Y))
-// 	} else {
-// 		windowSize.X = float32(rl.GetMonitorWidth(rl.GetCurrentMonitor())) / 2
-// 		windowSize.Y = float32(rl.GetMonitorHeight(rl.GetCurrentMonitor())) / 2
-// 		Player.scale = 5
-// 		rl.SetWindowSize(int(windowSize.X), int(windowSize.Y))
-// 	}
-// 	// Update player position
-// 	Player.transform.Width = (33 * Player.scale)
-// 	Player.transform.Height = (33 * Player.scale)
-// 	Player.transform.Y = windowSize.Y - Player.transform.Height - 100
-// 	is_fullscreen = !is_fullscreen
-// }
+func toggle_fullscreen() {
+	rl.ToggleFullscreen()
+	if !is_fullscreen {
+		rl.MaximizeWindow()
+	} else {
+		rl.RestoreWindow()
+		rl.SetWindowSize(int(windowSize.X), int(windowSize.Y))
+	}
+	is_fullscreen = !is_fullscreen
+}
+
+func calculate_window(width, height int) float64 {
+	// Seitenverhältnis des Referenzfensters
+	referenzSeitenverhältnis := float64(windowSize.X) / float64(windowSize.Y)
+
+	// Seitenverhältnis des aktuellen Fensters
+	fensterSeitenverhältnis := float64(width) / float64(height)
+
+	// Berechne den Skalierungsfaktor basierend auf dem Seitenverhältnisunterschied
+	skala := math.Min(float64(width)/float64(windowSize.X), float64(height)/float64(windowSize.Y))
+
+	// Anpassen der Skala, um das Seitenverhältnis des Referenzfensters beizubehalten
+	if fensterSeitenverhältnis > referenzSeitenverhältnis {
+		skala *= referenzSeitenverhältnis / fensterSeitenverhältnis
+	} else {
+		skala *= fensterSeitenverhältnis / referenzSeitenverhältnis
+	}
+
+	return skala
+}
 
 // Engine logic
 func setup_audio() {
