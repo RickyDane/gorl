@@ -7,7 +7,6 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
-	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -19,8 +18,8 @@ var (
 	frameCount   int64
 	update_count int64
 	windowSize   = rl.Vector2{
-		X: 1280,
-		Y: 720,
+		X: 480,
+		Y: 240,
 	}
 	scaled_width  float32 = 0
 	scaled_height float32 = 0
@@ -37,8 +36,8 @@ var (
 			Height: 33 * 5,
 		},
 		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - 33*5 - 50},
-		speed:          20,
-		sprint_speed:   30,
+		speed:          10,
+		sprint_speed:   20,
 		isRunnging:     false,
 		isFacingRight:  true,
 		isAttacking:    false,
@@ -150,7 +149,13 @@ func (a *App) Setup() {
 	// window_scale = float32(math.Min(float64(rl.GetScreenWidth())/float64(windowSize.X), float64(rl.GetScreenHeight())/float64(windowSize.Y)))
 	window_scale = float32(calculate_window(rl.GetScreenWidth(), rl.GetScreenHeight()))
 	window_render_texture = rl.LoadRenderTexture(int32(windowSize.X), int32(windowSize.Y))
-	rl.SetTextureFilter(window_render_texture.Texture, rl.FilterBilinear)
+	rl.SetTextureFilter(window_render_texture.Texture, rl.TextureFilterNearest)
+
+	// Initial window size
+	rl.MaximizeWindow()
+
+	// Load sprite atlas
+	sprite_atlas = rl.LoadTexture("assets/sprite_atlas.png")
 
 	// Load sprites for background
 	bg_layer_0 = get_texture(backgroundSprites[0])
@@ -165,31 +170,22 @@ func (a *App) Setup() {
 }
 
 func (a *App) Update() {
-	// Update app frame count: important for animations
-	// update_count++
-	// if rl.GetFPS()/60%60 == 0 {
-	// 	update_count = 0
-	// }
+	// Update frame count: important for animations
 	frameCount++
-	if frameCount >= 90 {
-		frameCount = 0
-	}
 
 	window_scale = float32(calculate_window(rl.GetRenderWidth(), rl.GetRenderHeight()))
 	scaled_width = float32(rl.GetRenderWidth()) - (windowSize.X * window_scale)
 	scaled_height = float32(rl.GetRenderHeight()) - (windowSize.Y * window_scale)
 
-	// Check player input for character movement
+	// :iplayer Check player input for character movement
 	if Player.isAttacking {
-		if Player.attackType == ATTACK_LIGHT && Player.animation_phase < len(sprite_table[Player.sprite_set][ATTACK_ANIM])-1 {
+		if (Player.attackType == ATTACK_LIGHT || Player.attackType == ATTACK_LIGHT_BACK || Player.attackType == ATTACK_HEAVY) && Player.animation_phase < Player.current_sprite.frame_count-1 {
 			a.play_attack_animation()
-		} else if Player.attackType == ATTACK_LIGHT_BACK && Player.animation_phase < len(sprite_table[Player.sprite_set][ATTACK2_ANIM])-1 {
-			a.play_attack_animation()
-		} else if Player.attackType == ATTACK_HEAVY && Player.animation_phase < len(sprite_table[Player.sprite_set][ATTACK3_ANIM])-1 {
-			a.play_attack_animation()
-		} else if betweenAttacksTimer > 0 {
-			if rl.IsMouseButtonDown(rl.MouseButtonLeft) && Player.attackType != ATTACK_LIGHT_BACK {
+		} else if betweenAttacksTimer > 0 && Player.attackType != ATTACK_LIGHT_BACK {
+			Player.attackType = ATTACK_NONE
+			if rl.IsMouseButtonDown(rl.MouseButtonLeft) {
 				Player.attackType = ATTACK_LIGHT_BACK
+				Player.current_sprite = attack2_anim
 				reset_for_animation()
 				a.play_attack_animation()
 				rl.PlaySound(SWING)
@@ -198,7 +194,6 @@ func (a *App) Update() {
 			betweenAttacksTimer -= 1 * deltaTime
 		} else {
 			reset_for_animation()
-			Player.isAttacking = false
 			betweenAttacksTimer = TIME_FOR_ATTACK_2
 			if pt_chance(0.75) && Player.attackType == ATTACK_HEAVY {
 				attack(Player.attack_damage * 3)
@@ -207,16 +202,19 @@ func (a *App) Update() {
 			} else {
 				attack(Player.attack_damage)
 			}
+			Player.isAttacking = false
 			Player.attackType = ATTACK_NONE
 		}
 	} else if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		reset_for_animation()
 		Player.attackType = ATTACK_LIGHT
+		a.play_attack_animation()
 		rl.PlaySound(SWING)
 		Player.isAttacking = true
 	} else if rl.IsMouseButtonPressed(rl.MouseButtonRight) {
 		reset_for_animation()
 		Player.attackType = ATTACK_HEAVY
+		a.play_attack_animation()
 		rl.PlaySound(SLASH_STRONG)
 		Player.isAttacking = true
 	} else if rl.IsKeyDown(rl.KeyA) {
@@ -227,11 +225,18 @@ func (a *App) Update() {
 		Player.isRunnging = false
 		Player.isAttacking = false
 	}
+	// Input for sprinting
 	if rl.IsKeyDown(rl.KeyLeftShift) && !Player.isAttacking {
 		Player.current_speed = Player.sprint_speed
 	} else {
 		Player.current_speed = Player.speed
 	}
+	// Input for jumping
+	// if rl.IsKeyPressed(rl.KeySpace) {
+	// 	Player.transform.Y += 100
+	// } else if Player.transform.Y >= 200 {
+	// 	Player.transform.Y -= 10 * deltaTime
+	// }
 
 	// Check player input for debug
 	if rl.IsKeyPressed(rl.KeyF1) { // Show hitboxes
@@ -268,17 +273,21 @@ func (a *App) Update() {
 func (a *App) Draw() {
 	draw_background()
 
-	// Draw entities
+	// :dentity Draw entities
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		element.Value.(*Entity).draw()
 	}
 
-	// Draw the player sprite
-	if Player.isFacingRight {
-		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
-	} else {
-		rl.DrawTextureRec(*Player.sprite, rl.Rectangle{X: 0, Y: 0, Width: -Player.transform.Width, Height: Player.transform.Height}, rl.Vector2{X: Player.transform.X, Y: Player.transform.Y}, color.RGBA{255, 255, 255, 255})
-	}
+	// :dplayer Draw the player sprite
+	rl.DrawTextureRec(
+		sprite_atlas,
+		get_anim_transform(&Player, 6),
+		rl.Vector2{
+			X: Player.transform.X,
+			Y: windowSize.Y - Player.current_sprite.height - 15,
+		},
+		rl.White,
+	)
 
 	// Draw lines to visualize the hitbox for debugging
 	if isHitboxDebug {
@@ -306,70 +315,50 @@ func (a *App) Draw() {
 // Player specific behaviours
 func (a *App) idle_player() {
 	rl.StopSound(GRASS_RUNNING)
-	Player.state = IDLE_ANIM
-	sprite := get_anim_sprite(&Player, 8)
-	sprite.Width = Player.transform.ToInt32().Width
-	sprite.Height = Player.transform.ToInt32().Height
-	if Player.sprite != nil {
-		rl.UnloadTexture(*Player.sprite)
-	}
-	Player.sprite = sprite
+	Player.current_sprite = idle_anim
 	Player.hitbox.Width = 50
 }
 func (a *App) run_left() {
 	if !rl.IsSoundPlaying(GRASS_RUNNING) {
 		rl.PlaySound(GRASS_RUNNING)
 	}
-	Player.state = RUN_ANIM
+	Player.current_sprite = run_anim
 	Player.world_position.X -= Player.current_speed
 	Player.isRunnging = true
 	Player.isFacingRight = false
-	sprite := get_anim_sprite(&Player, 100/int(Player.current_speed))
-	sprite.Width = Player.transform.ToInt32().Width
-	sprite.Height = Player.transform.ToInt32().Height
-	rl.UnloadTexture(*Player.sprite)
-	Player.sprite = sprite
 	scroll_background(-1)
 }
 func (a *App) run_right() {
 	if !rl.IsSoundPlaying(GRASS_RUNNING) {
 		rl.PlaySound(GRASS_RUNNING)
 	}
-	Player.state = RUN_ANIM
+	Player.current_sprite = run_anim
 	Player.world_position.X += Player.current_speed
 	Player.isRunnging = true
 	Player.isFacingRight = true
-	sprite := get_anim_sprite(&Player, 100/int(Player.current_speed))
-	sprite.Width = Player.transform.ToInt32().Width
-	sprite.Height = Player.transform.ToInt32().Height
-	rl.UnloadTexture(*Player.sprite)
-	Player.sprite = sprite
 	scroll_background(1)
 }
 func (a *App) play_attack_animation() {
-	sprite := rl.Texture2D{}
+	// sprite := rl.Texture2D{}
 	switch Player.attackType {
 	case ATTACK_LIGHT:
-		Player.state = ATTACK_ANIM
-		sprite = *get_anim_sprite(&Player, 4)
+		Player.current_sprite = attack1_anim
 	case ATTACK_LIGHT_BACK:
-		Player.state = ATTACK2_ANIM
-		sprite = *get_anim_sprite(&Player, 3)
+		Player.current_sprite = attack2_anim
 	case ATTACK_HEAVY:
-		Player.state = ATTACK3_ANIM
-		sprite = *get_anim_sprite(&Player, 6)
+		Player.current_sprite = attack3_anim
 	}
-	sprite.Width = Player.transform.ToInt32().Width
-	sprite.Height = Player.transform.ToInt32().Height
-	rl.UnloadTexture(*Player.sprite)
-	Player.sprite = &sprite
-	if Player.isFacingRight {
-		Player.hitbox.Width = 100
-		Player.hitbox.X = Player.transform.X + 100/2
-	} else {
-		Player.hitbox.X = Player.transform.X
-		Player.hitbox.Width = 100
-	}
+	// sprite.Width = Player.transform.ToInt32().Width
+	// sprite.Height = Player.transform.ToInt32().Height
+	// rl.UnloadTexture(*Player.sprite)
+	// Player.sprite = &sprite
+	// if Player.isFacingRight {
+	// 	Player.hitbox.Width = 100
+	// 	Player.hitbox.X = Player.transform.X + 100/2
+	// } else {
+	// 	Player.hitbox.X = Player.transform.X
+	// 	Player.hitbox.Width = 100
+	// }
 
 }
 func attack(attack_damage float32) {
@@ -386,7 +375,6 @@ func attack(attack_damage float32) {
 		}
 	}
 }
-
 func draw_background() {
 	if int32(scrolling_back) <= -bg_layer_0.Width*2 {
 		scrolling_back = 0
@@ -497,9 +485,8 @@ func contains(list list.List, target any) bool {
 	return false
 }
 func pt_chance(percentage float32) bool {
-	_rand := rand.New(rand.NewSource(time.Now().UnixMicro()))
-	randomNumber := _rand.Intn(100) + 1
-	return randomNumber <= int(percentage)
+	randomNumber := rand.Float32() * 100
+	return percentage <= randomNumber
 }
 
 // Current not in use or worked on

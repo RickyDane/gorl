@@ -2,6 +2,56 @@ package main
 
 import rl "github.com/gen2brain/raylib-go/raylib"
 
+type Sprite struct {
+	x           float32
+	y           float32
+	width       float32
+	height      float32
+	frame_count int
+}
+
+// Sprite atlas
+// Load at runtime in setup
+// Sprites
+var sprite_atlas rl.Texture2D
+var (
+	idle_anim = Sprite{
+		x:           0,
+		y:           0,
+		width:       64,
+		height:      48,
+		frame_count: 6,
+	}
+	run_anim = Sprite{
+		x:           0,
+		y:           48,
+		width:       64,
+		height:      32,
+		frame_count: 8,
+	}
+	attack1_anim = Sprite{
+		x:           0,
+		y:           80,
+		width:       64,
+		height:      48,
+		frame_count: 6,
+	}
+	attack2_anim = Sprite{
+		x:           0,
+		y:           128,
+		width:       64,
+		height:      48,
+		frame_count: 4,
+	}
+	attack3_anim = Sprite{
+		x:           0,
+		y:           80,
+		width:       64,
+		height:      48,
+		frame_count: 6,
+	}
+)
+
 // Assets
 var (
 	sprite_table = [][][]*rl.Image{
@@ -79,4 +129,18 @@ var (
 func get_anim_sprite(entity *Entity, speed int) *rl.Texture2D {
 	entity.animation_phase = int(frameCount) / speed % len(sprite_table[entity.sprite_set][entity.state])
 	return get_texture(sprite_table[entity.sprite_set][entity.state][entity.animation_phase])
+}
+
+func get_anim_transform(entity *Entity, speed int) rl.Rectangle {
+	entity.animation_phase = int(frameCount) / speed % entity.current_sprite.frame_count
+	entity_width_factor := 1
+	if !entity.isFacingRight {
+		entity_width_factor = -1
+	}
+	return rl.Rectangle{
+		X:      entity.current_sprite.x + (entity.current_sprite.width * float32(Player.animation_phase)),
+		Y:      entity.current_sprite.y,
+		Width:  entity.current_sprite.width * float32(entity_width_factor),
+		Height: entity.current_sprite.height,
+	}
 }

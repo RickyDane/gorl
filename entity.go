@@ -55,6 +55,7 @@ type Entity struct {
 	hit_cooldown      float32
 	is_colliding      bool
 	colliding_objects list.List
+	current_sprite    Sprite
 }
 
 func (e *Entity) update() {
