@@ -29,24 +29,19 @@ var (
 		name:          "Player",
 		health:        100,
 		attack_damage: 10,
-		transform: rl.Rectangle{
-			X:      windowSize.X / 4,
-			Y:      windowSize.Y - (33 * 5) - 50,
-			Width:  33 * 5,
-			Height: 33 * 5,
+		position: rl.Vector2{
+			X: windowSize.X / 4,
+			Y: windowSize.Y - 48 - 15,
 		},
-		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - 33*5 - 50},
+		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - 15},
 		speed:          10,
 		sprint_speed:   20,
-		isRunnging:     false,
+		isRunning:      false,
 		isFacingRight:  true,
 		isAttacking:    false,
 		attackType:     0,
-		scale:          5,
-		sprite:         nil,
-		sprite_set:     0,
 		entity_type:    PLAYER,
-		hitbox:         rl.Rectangle{X: windowSize.X/4 + (33 * 5 / 4), Y: windowSize.Y - (33*5 - 50), Width: (33 * 2), Height: 33 * 5},
+		hitbox:         rl.Rectangle{X: windowSize.X / 4, Y: windowSize.Y - 48 - 15, Width: 0, Height: 0},
 	}
 	deltaTime             float32    = 0
 	betweenAttacksTimer   float32    = TIME_FOR_ATTACK_2
@@ -170,9 +165,10 @@ func (a *App) Setup() {
 }
 
 func (a *App) Update() {
-	// Update frame count: important for animations
+	// Update frame count: important for animations!
 	frameCount++
 
+	// Update window information for scaling
 	window_scale = float32(calculate_window(rl.GetRenderWidth(), rl.GetRenderHeight()))
 	scaled_width = float32(rl.GetRenderWidth()) - (windowSize.X * window_scale)
 	scaled_height = float32(rl.GetRenderHeight()) - (windowSize.Y * window_scale)
@@ -222,7 +218,7 @@ func (a *App) Update() {
 	} else if rl.IsKeyDown(rl.KeyD) {
 		a.run_right()
 	} else {
-		Player.isRunnging = false
+		Player.isRunning = false
 		Player.isAttacking = false
 	}
 	// Input for sprinting
@@ -233,9 +229,9 @@ func (a *App) Update() {
 	}
 	// Input for jumping
 	// if rl.IsKeyPressed(rl.KeySpace) {
-	// 	Player.transform.Y += 100
-	// } else if Player.transform.Y >= 200 {
-	// 	Player.transform.Y -= 10 * deltaTime
+	// 	Player.position.Y -= 35
+	// } else if Player.position.Y < windowSize.Y-Player.current_sprite.height-15 {
+	// 	Player.position.Y += 150 * deltaTime
 	// }
 
 	// Check player input for debug
@@ -243,11 +239,11 @@ func (a *App) Update() {
 		isHitboxDebug = !isHitboxDebug
 	}
 	if rl.IsKeyPressed(rl.KeyO) { // Add new entity to entity list
-		spawn_entity("Demon", rl.Rectangle{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -25, Width: 44, Height: 44}, DEMON, 1, 8)
+		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -25}, DEMON)
 	}
 	if rl.IsKeyPressed(rl.KeyL) {
 		// Clear list of entities
-		arr_entities = []*Entity{}
+		ls_entities = list.New()
 	}
 
 	// Check player input for some stuff
@@ -260,7 +256,7 @@ func (a *App) Update() {
 	}
 
 	// Reset / idle player when not doing anything
-	if !Player.isRunnging && !Player.isAttacking {
+	if !Player.isRunning && !Player.isAttacking {
 		// Constantly update player hitbox to keep up with player transform
 		Player.update_hitbox()
 		a.idle_player()
@@ -283,8 +279,8 @@ func (a *App) Draw() {
 		sprite_atlas,
 		get_anim_transform(&Player, 6),
 		rl.Vector2{
-			X: Player.transform.X,
-			Y: windowSize.Y - Player.current_sprite.height - 15,
+			X: Player.position.X,
+			Y: Player.position.Y,
 		},
 		rl.White,
 	)
@@ -293,11 +289,6 @@ func (a *App) Draw() {
 	if isHitboxDebug {
 		// Player hitbox
 		rl.DrawRectangleRoundedLines(Player.hitbox, 0, 0, 1, rl.Red)
-		// Entities hitboxes
-		for element := ls_entities.Front(); element != nil; element = element.Next() {
-			entity := element.Value.(*Entity)
-			rl.DrawRectangleLines(int32(entity.hitbox.X), int32(entity.hitbox.Y), int32(entity.hitbox.Width), int32(entity.hitbox.Height), rl.Red)
-		}
 	}
 
 	// Smoothly move clouds constantly
@@ -316,7 +307,6 @@ func (a *App) Draw() {
 func (a *App) idle_player() {
 	rl.StopSound(GRASS_RUNNING)
 	Player.current_sprite = idle_anim
-	Player.hitbox.Width = 50
 }
 func (a *App) run_left() {
 	if !rl.IsSoundPlaying(GRASS_RUNNING) {
@@ -324,7 +314,7 @@ func (a *App) run_left() {
 	}
 	Player.current_sprite = run_anim
 	Player.world_position.X -= Player.current_speed
-	Player.isRunnging = true
+	Player.isRunning = true
 	Player.isFacingRight = false
 	scroll_background(-1)
 }
@@ -334,12 +324,11 @@ func (a *App) run_right() {
 	}
 	Player.current_sprite = run_anim
 	Player.world_position.X += Player.current_speed
-	Player.isRunnging = true
+	Player.isRunning = true
 	Player.isFacingRight = true
 	scroll_background(1)
 }
 func (a *App) play_attack_animation() {
-	// sprite := rl.Texture2D{}
 	switch Player.attackType {
 	case ATTACK_LIGHT:
 		Player.current_sprite = attack1_anim
@@ -348,20 +337,12 @@ func (a *App) play_attack_animation() {
 	case ATTACK_HEAVY:
 		Player.current_sprite = attack3_anim
 	}
-	// sprite.Width = Player.transform.ToInt32().Width
-	// sprite.Height = Player.transform.ToInt32().Height
-	// rl.UnloadTexture(*Player.sprite)
-	// Player.sprite = &sprite
-	// if Player.isFacingRight {
-	// 	Player.hitbox.Width = 100
-	// 	Player.hitbox.X = Player.transform.X + 100/2
-	// } else {
-	// 	Player.hitbox.X = Player.transform.X
-	// 	Player.hitbox.Width = 100
-	// }
-
 }
 func attack(attack_damage float32) {
+	Player.hitbox.Width = 50
+	if !Player.isFacingRight {
+		Player.hitbox.X -= 12.5
+	}
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		element := element.Value.(*Entity)
 		if is_entity_colliding(Player, *element) {
@@ -458,12 +439,12 @@ func bToMb(b uint64) float32 {
 func print_debug_info() {
 	fmt.Print("\033[H\033[2J")
 	PrintMemUsage()
-	fmt.Printf("Player position: x {%f} y{%f} \n", Player.transform.X, Player.transform.Y)
+	fmt.Printf("Player position: x {%f} y{%f} \n", Player.position.X, Player.position.Y)
 	fmt.Printf("Player world position: x: {%f} y: {%f}\n", Player.world_position.X, Player.world_position.Y)
 	fmt.Printf("Player hitbox %v", Player.hitbox)
 	println("Player is using attack: ", Player.attackType)
 	println("Player is attacking: ", Player.isAttacking)
-	println("Player is running: ", Player.isRunnging)
+	println("Player is running: ", Player.isRunning)
 	println("Player animation_phase: ", Player.animation_phase)
 	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
 	println("Is audio device ready: ", rl.IsAudioDeviceReady())
@@ -533,33 +514,29 @@ func setup_audio() {
 	SLASH_STRONG = rl.LoadSound("assets/sounds/slash_strong.wav")
 	GRASS_RUNNING = rl.LoadSound("assets/sounds/grass_running.wav")
 }
-func spawn_entity(name string, transform rl.Rectangle, entity_type EntityType, sprite_set int, scale int) Entity {
+func spawn_entity(name string, position rl.Vector2, entity_type EntityType) Entity {
 	// Make the entity face the player
 	is_facing_right := true
-	if transform.X >= Player.world_position.X {
+	if position.X >= Player.world_position.X {
 		is_facing_right = false
 	}
 
-	transform.Width *= float32(scale)
-	transform.Height *= float32(scale)
-	transform.Y += windowSize.Y - transform.Height
+	position.Y = windowSize.Y - 25
 
 	new_entity := Entity{
 		id:             int64(rl.GetRandomValue(0, 100000)),
 		name:           name,
 		health:         100,
+		max_health:     100,
 		attack_damage:  10,
-		transform:      transform,
-		world_position: rl.Vector2{X: transform.X, Y: transform.Y},
+		position:       position,
+		world_position: rl.Vector2{X: position.X, Y: position.Y},
 		speed:          5,
-		scale:          float32(scale),
-		sprite:         nil,
 		isFacingRight:  is_facing_right,
-		sprite_set:     sprite_set,
 		entity_type:    entity_type,
-		state:          IDLE_ANIM,
 		hit_cooldown:   ENTITY_HIT_COOLDOWN,
 		is_colliding:   false,
+		current_sprite: demon_idle,
 	}
 	arr_entities = append(arr_entities, &new_entity)
 	ls_entities.PushBack(&new_entity)
@@ -569,26 +546,22 @@ func kill_entity(entity *Entity) {
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		if element.Value.(*Entity) == entity {
 			ls_entities.Remove(element)
-			fmt.Println("Killed entity")
+			fmt.Println("Entity killed")
 			break
 		}
 	}
-	// for index := range arr_entities {
-	// 	e := arr_entities[index]
-	// 	if e.id == entity.id {
-	// 		arr_entities = remove_copy(arr_entities, index)
-	// 		break
-	// 	}
-	// }
 }
-func is_entity_colliding(first_entity Entity, second_entity Entity) bool {
-	source_hitbox := first_entity.hitbox
-	target_hitbox := second_entity.hitbox
-	if target_hitbox.X+target_hitbox.Width >= source_hitbox.X && target_hitbox.X+target_hitbox.Width < source_hitbox.X+source_hitbox.Width {
-		return true
-	} else if source_hitbox.X+source_hitbox.Width >= target_hitbox.X && source_hitbox.X+source_hitbox.Width < target_hitbox.X+target_hitbox.Width {
-		return true
-	} else {
+func is_entity_colliding(e1, e2 Entity) bool {
+	// Check if entities are too far apart on the X-axis
+	if math.Abs(float64(e1.hitbox.X-e2.hitbox.X)) > (float64(e1.hitbox.Width/2 + e2.hitbox.Width/2)) {
 		return false
 	}
+
+	// Check if entities are too far apart on the Y-axis
+	if math.Abs(float64(e1.hitbox.Y-e2.hitbox.Y)) > (float64(e1.hitbox.Height/2 + e2.hitbox.Height/2)) {
+		return false
+	}
+
+	// If they passed both checks, they must be overlapping
+	return true
 }
