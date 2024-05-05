@@ -1,8 +1,12 @@
 # Project overview
 
-### Reason why
+## Reason why
 - I just wanted to get a sneak peak into Go and now I love it!
 
-### Showcase
+## Technologies
+- Golang 🕹️
+- Raylib ↗️
+- My genius 🧠
 
-https://github.com/RickyDane/gorl/assets/82893522/6f21ac0b-4831-430e-985a-d5100388fa32
+## Showcase
+![output](https://github.com/RickyDane/gorl/assets/82893522/0d5daf4a-a85c-47fc-9a85-b3828fe0f85e)
