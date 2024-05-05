@@ -18,8 +18,8 @@ var (
 	frameCount   int64
 	update_count int64
 	windowSize   = rl.Vector2{
-		X: 480,
-		Y: 240,
+		X: 1280,
+		Y: 720,
 	}
 	scaled_width  float32 = 0
 	scaled_height float32 = 0
@@ -28,25 +28,25 @@ var (
 		id:            int64(rl.GetRandomValue(0, 100000)),
 		name:          "Player",
 		health:        100,
+		max_health:    100,
 		attack_damage: 10,
 		position: rl.Vector2{
 			X: windowSize.X / 4,
-			Y: windowSize.Y - 48 - 15,
+			Y: windowSize.Y - 48*3 - 30,
 		},
-		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y - 15},
-		speed:          10,
-		sprint_speed:   20,
+		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y*3 - 30},
+		speed:          15,
+		sprint_speed:   25,
 		isRunning:      false,
 		isFacingRight:  true,
 		isAttacking:    false,
 		attackType:     0,
 		entity_type:    PLAYER,
-		hitbox:         rl.Rectangle{X: windowSize.X / 4, Y: windowSize.Y - 48 - 15, Width: 0, Height: 0},
+		hitbox:         rl.Rectangle{X: windowSize.X / 4, Y: windowSize.Y - 48*3 - 30, Width: 0, Height: 0},
 	}
 	deltaTime             float32    = 0
 	betweenAttacksTimer   float32    = TIME_FOR_ATTACK_2
 	isHitboxDebug         bool       = false
-	arr_entities          []*Entity  = make([]*Entity, 0)
 	ls_entities           *list.List = list.New()
 	is_fullscreen         bool       = false
 	window_render_texture rl.RenderTexture2D
@@ -218,6 +218,9 @@ func (a *App) Update() {
 	} else if rl.IsKeyDown(rl.KeyD) {
 		a.run_right()
 	} else {
+		// Constantly update player hitbox to keep up with player transform
+		Player.update_hitbox()
+		a.idle_player()
 		Player.isRunning = false
 		Player.isAttacking = false
 	}
@@ -255,13 +258,6 @@ func (a *App) Update() {
 		element.Value.(*Entity).update()
 	}
 
-	// Reset / idle player when not doing anything
-	if !Player.isRunning && !Player.isAttacking {
-		// Constantly update player hitbox to keep up with player transform
-		Player.update_hitbox()
-		a.idle_player()
-	}
-
 	// Debug print output
 	print_debug_info()
 }
@@ -275,13 +271,21 @@ func (a *App) Draw() {
 	}
 
 	// :dplayer Draw the player sprite
-	rl.DrawTextureRec(
+	// rl.DrawTextureRec(
+	// 	sprite_atlas,
+	// 	get_anim_transform(&Player, 6),
+	// 	rl.Vector2{
+	// 		X: Player.position.X,
+	// 		Y: Player.position.Y,
+	// 	},
+	// 	rl.White,
+	// )
+	rl.DrawTexturePro(
 		sprite_atlas,
 		get_anim_transform(&Player, 6),
-		rl.Vector2{
-			X: Player.position.X,
-			Y: Player.position.Y,
-		},
+		rl.Rectangle{X: Player.position.X, Y: Player.position.Y, Width: Player.current_sprite.width * 3, Height: Player.current_sprite.height * 3},
+		rl.Vector2{X: 0, Y: 0},
+		0,
 		rl.White,
 	)
 
@@ -292,7 +296,7 @@ func (a *App) Draw() {
 	}
 
 	// Smoothly move clouds constantly
-	scrolling_clouds += 1
+	scrolling_clouds += 0.2
 
 	// Draw foreground over player
 	bg_layer_8.Width = int32(windowSize.X)
@@ -339,17 +343,17 @@ func (a *App) play_attack_animation() {
 	}
 }
 func attack(attack_damage float32) {
-	Player.hitbox.Width = 50
+	Player.hitbox.Width = 100
 	if !Player.isFacingRight {
-		Player.hitbox.X -= 12.5
+		Player.hitbox.X = Player.position.X + 25
 	}
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
-		element := element.Value.(*Entity)
-		if is_entity_colliding(Player, *element) {
-			element.was_hit = true
-			element.health -= attack_damage
-			if element.health <= 0 {
-				kill_entity(element)
+		entity := element.Value.(*Entity)
+		if is_entity_colliding(Player, *entity) {
+			entity.was_hit = true
+			entity.health -= attack_damage
+			if entity.health <= 0 {
+				kill_entity(entity)
 				attack(attack_damage)
 				break
 			}
@@ -448,7 +452,6 @@ func print_debug_info() {
 	println("Player animation_phase: ", Player.animation_phase)
 	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
 	println("Is audio device ready: ", rl.IsAudioDeviceReady())
-	println("Entities array length: ", len(arr_entities))
 	println("Entities list length", ls_entities.Len())
 	fmt.Printf("Window width: %f height: %f\n", windowSize.X, windowSize.Y)
 	fmt.Printf("Window scale: %f\n", window_scale)
@@ -521,7 +524,7 @@ func spawn_entity(name string, position rl.Vector2, entity_type EntityType) Enti
 		is_facing_right = false
 	}
 
-	position.Y = windowSize.Y - 25
+	position.Y = windowSize.Y - 48*3 - 30
 
 	new_entity := Entity{
 		id:             int64(rl.GetRandomValue(0, 100000)),
@@ -538,7 +541,6 @@ func spawn_entity(name string, position rl.Vector2, entity_type EntityType) Enti
 		is_colliding:   false,
 		current_sprite: demon_idle,
 	}
-	arr_entities = append(arr_entities, &new_entity)
 	ls_entities.PushBack(&new_entity)
 	return new_entity
 }

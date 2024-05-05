@@ -66,16 +66,15 @@ func (e *Entity) draw() {
 
 	// Change the position of the entity relative to the players world position
 	e.position.X = e.world_position.X - Player.world_position.X/3
-	e.position.Y = windowSize.Y - e.current_sprite.height - 15
+	e.position.Y = windowSize.Y - e.current_sprite.height*4 - 25
 
 	if e.was_hit {
-		rl.DrawTextureRec(
+		rl.DrawTexturePro(
 			sprite_atlas,
-			get_anim_transform(e, 10),
-			rl.Vector2{
-				X: e.position.X,
-				Y: e.position.Y,
-			},
+			get_anim_transform(e, 6),
+			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.current_sprite.width * 4, Height: e.current_sprite.height * 4},
+			rl.Vector2{X: 0, Y: 0},
+			0,
 			rl.Red,
 		)
 		e.hit_cooldown -= 1 * deltaTime
@@ -84,13 +83,12 @@ func (e *Entity) draw() {
 			e.hit_cooldown = ENTITY_HIT_COOLDOWN
 		}
 	} else {
-		rl.DrawTextureRec(
+		rl.DrawTexturePro(
 			sprite_atlas,
-			get_anim_transform(e, 10),
-			rl.Vector2{
-				X: e.position.X,
-				Y: e.position.Y,
-			},
+			get_anim_transform(e, 6),
+			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.current_sprite.width * 4, Height: e.current_sprite.height * 4},
+			rl.Vector2{X: 0, Y: 0},
+			0,
 			rl.White,
 		)
 	}
@@ -105,15 +103,15 @@ func (e *Entity) draw() {
 }
 
 func (e *Entity) update_hitbox() {
-	if e.entity_type == PLAYER {
-		e.hitbox.Width = e.current_sprite.width / 2
-		e.hitbox.X = e.position.X + e.current_sprite.width/4
-		e.hitbox.Height = e.current_sprite.height
+	if e.entity_type == PLAYER && !Player.isAttacking {
+		e.hitbox.Width = e.current_sprite.width
+		e.hitbox.X = e.position.X + e.current_sprite.width
+		e.hitbox.Height = e.current_sprite.height * 3
 		e.hitbox.Y = Player.position.Y
 	} else if e.entity_type == DEMON {
-		e.hitbox.Width = e.current_sprite.width / 2
-		e.hitbox.X = e.position.X + e.current_sprite.width/4
-		e.hitbox.Height = e.current_sprite.height
+		e.hitbox.Width = e.current_sprite.width * 2
+		e.hitbox.X = e.position.X + e.current_sprite.width
+		e.hitbox.Height = e.current_sprite.height * 4
 		e.hitbox.Y = e.position.Y
 	}
 }
@@ -133,11 +131,11 @@ func (e *Entity) check_collisions() {
 }
 
 func (e *Entity) draw_healthbar() {
-	width := int32(e.current_sprite.width)
-	height := int32(3)
+	width := int32(e.hitbox.Width)
+	height := int32(2)
 	percentage := int32(e.max_health / 100 * e.health)
 	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-5, width, height, rl.White)
-	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-5, (width/100)*percentage, height, rl.Red)
+	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-5, width*percentage/100, height, rl.Red)
 	rl.DrawText(strconv.FormatInt(int64(percentage), 10)+"%", e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-15, 10, rl.White)
 }
 
