@@ -48,6 +48,13 @@ var (
 		hitbox:         rl.Rectangle{X: windowSize.X / 4, Y: windowSize.Y - 48*3 - 30, Width: 0, Height: 0},
 		xp_to_reach:    100,
 		xp:             0,
+		sprite_color:   rl.White,
+	}
+	mouse_pos rl.Rectangle = rl.Rectangle{
+		X:      rl.GetMousePosition().X,
+		Y:      rl.GetMousePosition().Y,
+		Width:  5,
+		Height: 5,
 	}
 	deltaTime             float32    = 0
 	betweenAttacksTimer   float32    = TIME_FOR_ATTACK_2
@@ -55,6 +62,9 @@ var (
 	ls_entities           *list.List = list.New()
 	is_fullscreen         bool       = false
 	window_render_texture rl.RenderTexture2D
+	entity_hovered        *Entity = &Entity{}
+	is_ui_open            bool    = false
+	ui_type               UiType
 )
 
 // Background layers
@@ -104,17 +114,19 @@ func main() {
 		// Update deltaTime
 		deltaTime = 1.0 / 60
 
-		// Main engine update method implementation
-		app.Update()
-
 		// Play background music with updating the stream buffer
 		rl.UpdateMusicStream(BG_MUSIC)
+
+		// Main engine update method implementation
+		app.Update()
 
 		// Draw game on texture
 		rl.BeginTextureMode(window_render_texture)
 		rl.ClearBackground(rl.White)
+
 		// Main engine draw method implementation
 		app.Draw()
+
 		rl.EndTextureMode()
 		// At the end draw the texture scaled to the window size
 		rl.BeginDrawing()
@@ -167,18 +179,33 @@ func (a *App) Setup() {
 	bg_layer_7 = get_texture(backgroundSprites[7])
 	bg_layer_8 = get_texture(backgroundSprites[8])
 
+	// Spawn the first 3000 enemies across the world
 	for i := 0; i < 3000; i++ {
-		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(int32(windowSize.X), 1000000)), Y: -25}, DEMON)
+		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(int32(windowSize.X), 1000000)), Y: -25}, ENEMY, DEMON, 4)
 	}
+
+	// Spawn a shop
+	spawn_entity("Shop", rl.Vector2{X: 600, Y: -25}, SHOP, ENEMY_NONE, 6)
 }
 
 func (a *App) Update() {
-	Player.frame_count++ // Update frame count | Important for animations!
+	// Update frame count | Important for animations!
+	Player.frame_count++
+
+	// Update mouse position
+	mouse_pos = rl.Rectangle{
+		X:      float32(rl.GetMouseX()) / window_scale,
+		Y:      float32(rl.GetMouseY()) / window_scale,
+		Width:  mouse_pos.Width,
+		Height: mouse_pos.Height,
+	}
 
 	// Update window information for scaling
 	window_scale = float32(calculate_window(rl.GetRenderWidth(), rl.GetRenderHeight()))
 	scaled_width = float32(rl.GetRenderWidth()) - (windowSize.X * window_scale)
 	scaled_height = float32(rl.GetRenderHeight()) - (windowSize.Y * window_scale)
+
+	// ----------- :start ## PLAYER SPECIFIC START ## -----------
 
 	// :i_player Check player input for character movement
 	if Player.isAttacking {
@@ -191,41 +218,48 @@ func (a *App) Update() {
 				Player.current_sprite = attack2_anim
 				reset_for_animation()
 				a.play_attack_animation()
-				attack(Player.attack_damage)
 				rl.PlaySound(SWING)
+				attack(Player.attack_damage)
 			}
 			betweenAttacksTimer -= 1 * deltaTime
-		} else {
+		} else { // Combo for a second light attack
 			reset_for_animation()
 			betweenAttacksTimer = TIME_FOR_ATTACK_2
 			Player.isAttacking = false
 			Player.attackType = ATTACK_NONE
 		}
 	} else if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-		reset_for_animation()
-		Player.attackType = ATTACK_LIGHT
-		a.play_attack_animation()
-		rl.PlaySound(SWING)
-		attack(Player.attack_damage)
-		Player.isAttacking = true
-	} else if rl.IsMouseButtonPressed(rl.MouseButtonRight) {
-		reset_for_animation()
-		Player.attackType = ATTACK_HEAVY
-		a.play_attack_animation()
-		rl.PlaySound(SLASH_STRONG)
-		if pt_chance(0.5) {
-			attack(Player.attack_damage * 2)
-		} else {
+		if entity_hovered.entity_type == ENEMY {
+			reset_for_animation()
+			Player.attackType = ATTACK_LIGHT
+			a.play_attack_animation()
+			rl.PlaySound(SWING)
+			Player.isAttacking = true
 			attack(Player.attack_damage)
 		}
-		Player.isAttacking = true
-	} else if rl.IsKeyDown(rl.KeyA) {
+	} else if rl.IsMouseButtonPressed(rl.MouseButtonRight) {
+		if entity_hovered.entity_type == ENEMY {
+			reset_for_animation()
+			Player.attackType = ATTACK_HEAVY
+			a.play_attack_animation()
+			rl.PlaySound(SLASH_STRONG)
+			Player.isAttacking = true
+			if pt_chance(0.5) {
+				attack(Player.attack_damage * 2)
+			} else {
+				attack(Player.attack_damage)
+			}
+		}
+	} else {
+		Player.isAttacking = false
+	}
+	// Player movement left / right
+	if rl.IsKeyDown(rl.KeyA) {
 		a.run_left()
 	} else if rl.IsKeyDown(rl.KeyD) {
 		a.run_right()
 	} else {
 		Player.isRunning = false
-		Player.isAttacking = false
 	}
 	// Input for sprinting
 	if rl.IsKeyDown(rl.KeyLeftShift) && !Player.isAttacking {
@@ -240,12 +274,30 @@ func (a *App) Update() {
 	// 	Player.position.Y += 150 * deltaTime
 	// }
 
+	// Input for interacting with entities
+	if rl.IsKeyPressed(rl.KeyE) {
+		if entity_hovered.entity_type == SHOP && !is_ui_open {
+			ui_type = UI_SHOP
+			is_ui_open = true
+		} else if is_ui_open {
+			is_ui_open = false
+		}
+	}
+
 	// Check player input for debug
 	if rl.IsKeyPressed(rl.KeyF1) { // Show hitboxes
 		isHitboxDebug = !isHitboxDebug
 	}
+	if !Player.isAttacking && !Player.isRunning {
+		a.idle_player()
+	}
+	// Constantly update player hitbox to keep up with player transform
+	Player.update_hitbox()
+
+	// ----------- :end ## PLAYER SPECIFIC END ## -----------
+
 	if rl.IsKeyDown(rl.KeyO) { // Add new entity to entity list
-		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -25}, DEMON)
+		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -25}, ENEMY, DEMON, 4)
 	}
 	if rl.IsKeyPressed(rl.KeyL) {
 		// Clear list of entities
@@ -257,15 +309,11 @@ func (a *App) Update() {
 		toggle_fullscreen()
 	}
 
+	// Check if mouse is over entities and draw healthbar
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
-		element.Value.(*Entity).update()
+		entity := element.Value.(*Entity)
+		entity.update()
 	}
-
-	if !Player.isAttacking && !Player.isRunning {
-		a.idle_player()
-	}
-	// Constantly update player hitbox to keep up with player transform
-	Player.update_hitbox()
 
 	// Debug print output
 	print_debug_info()
@@ -274,34 +322,24 @@ func (a *App) Update() {
 func (a *App) Draw() {
 	draw_background()
 
-	// :dentity Draw entities
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
-		element.Value.(*Entity).draw()
+		entity := element.Value.(*Entity)
+		entity.draw()
+		if is_entity_colliding(Entity{hitbox: mouse_pos}, *entity) {
+			entity_hovered = entity
+		} else {
+			entity_hovered = &Entity{} // Clear if no entity is currently hovered
+		}
 	}
 
 	// :dplayer Draw the player sprite
-	// rl.DrawTextureRec(
-	// 	sprite_atlas,
-	// 	get_anim_transform(&Player, 6),
-	// 	rl.Vector2{
-	// 		X: Player.position.X,
-	// 		Y: Player.position.Y,
-	// 	},
-	// 	rl.White,
-	// )
-	rl.DrawTexturePro(
-		sprite_atlas,
-		get_anim_transform(&Player, 6),
-		rl.Rectangle{X: Player.position.X, Y: Player.position.Y, Width: Player.size.X, Height: Player.size.Y},
-		rl.Vector2{X: 0, Y: 0},
-		0,
-		rl.White,
-	)
+	draw_sprite(&Player, 1, Player.sprite_color, 6)
 
 	// Draw lines to visualize the hitbox for debugging
 	if isHitboxDebug {
 		// Player hitbox
 		rl.DrawRectangleRoundedLines(Player.hitbox, 0, 0, 1, rl.Red)
+		rl.DrawRectangleRoundedLines(mouse_pos, 0, 0, 1, rl.Green)
 	}
 
 	// Smoothly move clouds constantly
@@ -312,7 +350,7 @@ func (a *App) Draw() {
 	bg_layer_8.Height = int32(windowSize.Y)
 	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_8.Width), Height: float32(bg_layer_8.Height)}, rl.Vector2{X: 0, Y: 50}, color.RGBA{255, 255, 255, 255})
 
-	// Draw entire user interface
+	// Draw available user interface
 	draw_ui()
 
 	// Draw fps for debugging
@@ -328,7 +366,11 @@ func (a *App) run_left() {
 	if !rl.IsSoundPlaying(GRASS_RUNNING) {
 		rl.PlaySound(GRASS_RUNNING)
 	}
-	Player.current_sprite = run_anim
+	if !Player.isAttacking {
+		Player.current_sprite = run_anim
+	} else {
+		Player.current_speed = Player.speed / 3
+	}
 	Player.world_position.X -= Player.current_speed
 	Player.isRunning = true
 	Player.isFacingRight = false
@@ -338,7 +380,11 @@ func (a *App) run_right() {
 	if !rl.IsSoundPlaying(GRASS_RUNNING) {
 		rl.PlaySound(GRASS_RUNNING)
 	}
-	Player.current_sprite = run_anim
+	if !Player.isAttacking {
+		Player.current_sprite = run_anim
+	} else {
+		Player.current_speed = Player.speed / 3
+	}
 	Player.world_position.X += Player.current_speed
 	Player.isRunning = true
 	Player.isFacingRight = true
@@ -361,11 +407,13 @@ func attack(attack_damage float32) {
 	}
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		entity := element.Value.(*Entity)
-		if entity.was_hit {
-			continue
-		}
-		if is_entity_colliding(Player, *entity) {
-			entity.hit(attack_damage)
+		if entity.entity_type == ENEMY {
+			if entity.was_hit {
+				continue
+			}
+			if is_entity_colliding(Player, *entity) {
+				entity.hit(attack_damage)
+			}
 		}
 	}
 }
@@ -469,10 +517,12 @@ func print_debug_info() {
 	fmt.Printf("%f %f\n", scaled_width, scaled_height)
 	println("frameCount: ", Player.frame_count)
 	println("update_count: ", update_count)
+	fmt.Printf("Mouse pos: %v\n", rl.GetMousePosition())
+	println("Entity hovered: ", entity_hovered.name)
 	// fmt.Printf("Entites array:  %+v", arr_entities)
 }
 func contains(list list.List, target any) bool {
-	for item := list.Front(); item != nil; item = list.Back().Next() {
+	for item := list.Front(); item != nil; item = item.Next() {
 		if item == target {
 			return true
 		}
@@ -518,6 +568,11 @@ func player_add_xp(xp int32) {
 	Player.xp += xp
 	if Player.xp >= Player.xp_to_reach {
 		Player.level += 1
+		if Player.level == 1 {
+			rl.PlaySound(FIRST_LEVEL_UP)
+		} else {
+			rl.PlaySound(LEVEL_UP)
+		}
 		Player.xp = Player.xp % Player.xp_to_reach
 		Player.xp_to_reach = int32(float32(Player.xp_to_reach) * 1.15)
 	}
@@ -536,41 +591,54 @@ func setup_audio() {
 	SLASH_STRONG = rl.LoadSound("assets/sounds/slash_strong.wav")
 	GRASS_RUNNING = rl.LoadSound("assets/sounds/grass_running.wav")
 	HIT = rl.LoadSound("assets/sounds/hit.wav")
+	FIRST_LEVEL_UP = rl.LoadSound("assets/sounds/first_level_up.wav")
+	LEVEL_UP = rl.LoadSound("assets/sounds/level_up.mp3")
 }
-func spawn_entity(name string, position rl.Vector2, entity_type EntityType) Entity {
+func spawn_entity(name string, position rl.Vector2, entity_type EntityType, enemy_type EnemyType, scale float32) Entity {
 	// Make the entity face the player
 	is_facing_right := true
-	if position.X >= Player.world_position.X {
-		is_facing_right = false
-	}
-
 	position.Y = windowSize.Y - 48*4 - 30
 
+	sprite := Sprite{}
+	if entity_type == ENEMY {
+		switch enemy_type {
+		case DEMON:
+			sprite = demon_idle
+		}
+		// <-- Add more cases here
+		if position.X >= Player.world_position.X {
+			is_facing_right = false
+		}
+	} else if entity_type == SHOP {
+		sprite = shop
+	}
+
 	new_entity := Entity{
-		id:            int64(rl.GetRandomValue(0, 100000)),
+		id:            int64(rl.GetRandomValue(0, 1000000)),
 		name:          name,
 		health:        100,
 		max_health:    100,
 		attack_damage: 10,
 		position:      position,
 		size: rl.Vector2{
-			X: 48 * 4,
-			Y: 48 * 4,
+			X: 48 * scale,
+			Y: 48 * scale,
 		},
 		world_position: rl.Vector2{X: position.X, Y: position.Y},
 		speed:          5,
 		isFacingRight:  is_facing_right,
 		entity_type:    entity_type,
+		enemy_type:     enemy_type,
 		hit_cooldown:   ENTITY_HIT_COOLDOWN,
-		is_colliding:   false,
-		current_sprite: demon_idle,
+		current_sprite: sprite,
+		sprite_color:   rl.White,
 	}
 	ls_entities.PushBack(&new_entity)
 	return new_entity
 }
 func kill_entity(entity *Entity) {
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
-		if element.Value.(*Entity) == entity {
+		if element.Value.(*Entity).id == entity.id {
 			ls_entities.Remove(element)
 			break
 		}
@@ -595,4 +663,14 @@ func is_entity_colliding(e1, e2 Entity) bool {
 	}
 	// If none of the above conditions hold, there must be a collision
 	return true
+}
+func draw_sprite(entity *Entity, scale float32, color rl.Color, speed int) {
+	rl.DrawTexturePro(
+		sprite_atlas,
+		get_anim_transform(entity, speed),
+		rl.Rectangle{X: entity.position.X, Y: entity.position.Y, Width: entity.size.X * scale, Height: entity.size.Y * scale},
+		rl.Vector2{X: 0, Y: 0},
+		0,
+		color,
+	)
 }

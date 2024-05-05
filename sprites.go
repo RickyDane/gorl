@@ -59,6 +59,22 @@ var (
 		height:      48,
 		frame_count: 6,
 	}
+	// :s_shop
+	shop = Sprite{
+		x:           880,
+		y:           896,
+		width:       120,
+		height:      120,
+		frame_count: 1,
+	}
+	// :s_ui
+	panel = Sprite{
+		x:           0,
+		y:           880,
+		width:       240,
+		height:      120,
+		frame_count: 1,
+	}
 )
 
 // Assets

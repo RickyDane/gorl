@@ -6,7 +6,19 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+type UiType int
+
+const (
+	UI_SHOP UiType = iota
+)
+
 func draw_ui() {
+	if is_ui_open {
+		switch ui_type {
+		case UI_SHOP:
+			draw_shop_ui()
+		}
+	}
 	draw_xp_bar()
 }
 
@@ -19,4 +31,18 @@ func draw_xp_bar() {
 	rl.DrawRectangle(int32(windowSize.X)-bar_width-20, 20, int32(float64(bar_width)*percentage), bar_height, rl.Orange)
 	rl.DrawText("Level: "+strconv.FormatInt(int64(Player.level), 10), int32(windowSize.X)-rl.MeasureText("Level: "+strconv.FormatInt(int64(Player.level), 10), 20)-bar_width-20-10, 15, 20, rl.Black)
 	rl.DrawText(strconv.FormatFloat(percentage, 'G', -1, 64), 50, 50, 20, rl.Beige)
+}
+func draw_shop_ui() {
+	shop_ui_entity := Entity{
+		current_sprite: panel,
+		size: rl.Vector2{
+			X: windowSize.X / 2,
+			Y: windowSize.Y / 2,
+		},
+		position: rl.Vector2{
+			X: windowSize.X / 4,
+			Y: windowSize.Y / 4,
+		},
+	}
+	draw_sprite(&shop_ui_entity, 1, rl.White, 1)
 }

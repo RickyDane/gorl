@@ -9,23 +9,19 @@ import (
 )
 
 type EntityType int
-type EntityState int
+type EnemyType int
 
 const (
-	DEMON EntityType = iota
+	ENEMY EntityType = iota
 	PLAYER
+	SHOP
 	INTERACTIVE_WORLD_OJECT
 )
-
 const (
-	IDLE_ANIM EntityState = iota
-	RUN_ANIM
-	ATTACK_ANIM
-	ATTACK2_ANIM
-	ATTACK3_ANIM
-	DEATH_ANIM
+	ENEMY_NONE EnemyType = iota
+	DEMON
+	// <-- Add more enemy types here
 )
-
 const (
 	ENTITY_HIT_COOLDOWN float32 = 0.1
 )
@@ -37,6 +33,7 @@ type Entity struct {
 	health            float32
 	attack_damage     float32
 	entity_type       EntityType
+	enemy_type        EnemyType
 	position          rl.Vector2
 	size              rl.Vector2
 	world_position    rl.Vector2
@@ -58,6 +55,7 @@ type Entity struct {
 	xp                int32
 	xp_to_reach       int32
 	level             int32
+	sprite_color      rl.Color
 }
 
 func (e *Entity) update() {
@@ -75,14 +73,7 @@ func (e *Entity) draw() {
 	e.position.Y = windowSize.Y - e.size.Y - 30
 
 	if e.was_hit {
-		rl.DrawTexturePro(
-			sprite_atlas,
-			get_anim_transform(e, 6),
-			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.size.X, Height: e.size.Y},
-			rl.Vector2{X: 0, Y: 0},
-			0,
-			rl.Red,
-		)
+		draw_sprite(e, 1, rl.Red, 8)
 		e.hit_cooldown -= 1 * deltaTime
 		if e.hit_cooldown <= 0 {
 			e.was_hit = false
@@ -92,14 +83,7 @@ func (e *Entity) draw() {
 			kill_entity(e)
 		}
 	} else {
-		rl.DrawTexturePro(
-			sprite_atlas,
-			get_anim_transform(e, 6),
-			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.size.X, Height: e.size.Y},
-			rl.Vector2{X: 0, Y: 0},
-			0,
-			rl.White,
-		)
+		draw_sprite(e, 1, e.sprite_color, 8)
 	}
 
 	if isHitboxDebug {
@@ -107,8 +91,6 @@ func (e *Entity) draw() {
 		rl.DrawRectangleLines(int32(e.hitbox.X), int32(e.hitbox.Y), int32(e.hitbox.Width), int32(e.hitbox.Height), rl.Red)
 		rl.DrawText(e.name, int32(e.hitbox.X), int32(e.hitbox.Y), 5, rl.Red)
 	}
-
-	e.draw_healthbar()
 }
 
 func (e *Entity) update_hitbox() {
@@ -117,9 +99,14 @@ func (e *Entity) update_hitbox() {
 		e.hitbox.X = e.position.X + e.hitbox.Width/2
 		e.hitbox.Height = e.size.Y
 		e.hitbox.Y = e.position.Y
-	} else if e.entity_type == DEMON {
+	} else if e.entity_type == ENEMY {
 		e.hitbox.Width = e.size.X / 2
 		e.hitbox.X = e.position.X + e.hitbox.Width/2
+		e.hitbox.Height = e.size.Y
+		e.hitbox.Y = e.position.Y
+	} else {
+		e.hitbox.Width = e.size.X
+		e.hitbox.X = e.position.X
 		e.hitbox.Height = e.size.Y
 		e.hitbox.Y = e.position.Y
 	}
@@ -128,6 +115,15 @@ func (e *Entity) update_hitbox() {
 func (e *Entity) check_collisions() {
 	// Checking for collisions with other entities
 	// TODO: impl
+
+	// Check for "collision" with mouse position
+	if is_entity_colliding(*e, Entity{hitbox: mouse_pos}) && (e.entity_type == INTERACTIVE_WORLD_OJECT || e.entity_type == SHOP) {
+		e.sprite_color = rl.LightGray
+	} else if is_entity_colliding(*e, Entity{hitbox: mouse_pos}) {
+		e.draw_healthbar()
+	} else {
+		e.sprite_color = rl.White
+	}
 
 	// Check for collisions with player
 	if is_entity_colliding(*e, Player) && !contains(e.colliding_objects, Player) {
@@ -141,11 +137,11 @@ func (e *Entity) check_collisions() {
 
 func (e *Entity) draw_healthbar() {
 	width := int32(e.hitbox.Width)
-	height := int32(2)
+	height := int32(5)
 	percentage := int32(e.max_health / 100 * e.health)
-	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-5, width, height, rl.White)
-	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-5, width*percentage/100, height, rl.Red)
-	rl.DrawText(strconv.FormatInt(int64(percentage), 10)+"%", e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-15, 10, rl.White)
+	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-10, width, height, rl.White)
+	rl.DrawRectangle(e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-10, width*percentage/100, height, rl.Red)
+	rl.DrawText(strconv.FormatInt(int64(percentage), 10)+"%", e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-20, 10, rl.White)
 }
 
 func (e *Entity) hit(damage float32) {
