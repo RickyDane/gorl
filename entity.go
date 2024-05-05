@@ -79,9 +79,6 @@ func (e *Entity) draw() {
 			e.was_hit = false
 			e.hit_cooldown = ENTITY_HIT_COOLDOWN
 		}
-		if e.health <= 0 {
-			kill_entity(e)
-		}
 	} else {
 		draw_sprite(e, 1, e.sprite_color, 8)
 	}
@@ -90,6 +87,10 @@ func (e *Entity) draw() {
 		// Draw entity name centered over head
 		rl.DrawRectangleLines(int32(e.hitbox.X), int32(e.hitbox.Y), int32(e.hitbox.Width), int32(e.hitbox.Height), rl.Red)
 		rl.DrawText(e.name, int32(e.hitbox.X), int32(e.hitbox.Y), 5, rl.Red)
+	}
+
+	if entity_hovered == e && e.entity_type == ENEMY {
+		e.draw_healthbar()
 	}
 }
 
@@ -119,8 +120,6 @@ func (e *Entity) check_collisions() {
 	// Check for "collision" with mouse position
 	if is_entity_colliding(*e, Entity{hitbox: mouse_pos}) && (e.entity_type == INTERACTIVE_WORLD_OJECT || e.entity_type == SHOP) {
 		e.sprite_color = rl.LightGray
-	} else if is_entity_colliding(*e, Entity{hitbox: mouse_pos}) {
-		e.draw_healthbar()
 	} else {
 		e.sprite_color = rl.White
 	}
@@ -149,6 +148,9 @@ func (e *Entity) hit(damage float32) {
 	e.health -= damage
 	rl.PlaySound(HIT)
 	if e.health <= 0 {
+		if e.health <= 0 {
+			kill_entity(e)
+		}
 		e.health = 0
 		player_add_xp(25)
 	}

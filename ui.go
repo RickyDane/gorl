@@ -30,7 +30,6 @@ func draw_xp_bar() {
 	rl.DrawRectangle(int32(windowSize.X)-202-19, 19, 202, 12, rl.White)
 	rl.DrawRectangle(int32(windowSize.X)-bar_width-20, 20, int32(float64(bar_width)*percentage), bar_height, rl.Orange)
 	rl.DrawText("Level: "+strconv.FormatInt(int64(Player.level), 10), int32(windowSize.X)-rl.MeasureText("Level: "+strconv.FormatInt(int64(Player.level), 10), 20)-bar_width-20-10, 15, 20, rl.Black)
-	rl.DrawText(strconv.FormatFloat(percentage, 'G', -1, 64), 50, 50, 20, rl.Beige)
 }
 func draw_shop_ui() {
 	shop_ui_entity := Entity{
@@ -45,4 +44,6 @@ func draw_shop_ui() {
 		},
 	}
 	draw_sprite(&shop_ui_entity, 1, rl.White, 1)
+	rl.DrawText("Upgrades", int32(shop_ui_entity.position.X)+int32(shop_ui_entity.size.X)/2-rl.MeasureText("Upgrades", 30)/2+1, int32(shop_ui_entity.position.Y)+20+1, 30, rl.ColorAlpha(rl.Gray, 0.75))
+	rl.DrawText("Upgrades", int32(shop_ui_entity.position.X)+int32(shop_ui_entity.size.X)/2-rl.MeasureText("Upgrades", 30)/2, int32(shop_ui_entity.position.Y)+20, 30, rl.ColorAlpha(rl.Black, 0.5))
 }

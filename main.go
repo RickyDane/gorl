@@ -205,6 +205,20 @@ func (a *App) Update() {
 	scaled_width = float32(rl.GetRenderWidth()) - (windowSize.X * window_scale)
 	scaled_height = float32(rl.GetRenderHeight()) - (windowSize.Y * window_scale)
 
+	is_entity_hovered := false
+	for element := ls_entities.Front(); element != nil; element = element.Next() {
+		entity := element.Value.(*Entity)
+		entity.update()
+		// Check if mouse is over entities and draw healthbar
+		if is_entity_colliding(Entity{hitbox: mouse_pos}, *entity) {
+			entity_hovered = entity
+			is_entity_hovered = true
+		}
+	}
+	if !is_entity_hovered {
+		entity_hovered = &Entity{}
+	}
+
 	// ----------- :start ## PLAYER SPECIFIC START ## -----------
 
 	// :i_player Check player input for character movement
@@ -309,12 +323,6 @@ func (a *App) Update() {
 		toggle_fullscreen()
 	}
 
-	// Check if mouse is over entities and draw healthbar
-	for element := ls_entities.Front(); element != nil; element = element.Next() {
-		entity := element.Value.(*Entity)
-		entity.update()
-	}
-
 	// Debug print output
 	print_debug_info()
 }
@@ -325,11 +333,6 @@ func (a *App) Draw() {
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		entity := element.Value.(*Entity)
 		entity.draw()
-		if is_entity_colliding(Entity{hitbox: mouse_pos}, *entity) {
-			entity_hovered = entity
-		} else {
-			entity_hovered = &Entity{} // Clear if no entity is currently hovered
-		}
 	}
 
 	// :dplayer Draw the player sprite
@@ -413,6 +416,7 @@ func attack(attack_damage float32) {
 			}
 			if is_entity_colliding(Player, *entity) {
 				entity.hit(attack_damage)
+				attack(attack_damage)
 			}
 		}
 	}
@@ -574,7 +578,7 @@ func player_add_xp(xp int32) {
 			rl.PlaySound(LEVEL_UP)
 		}
 		Player.xp = Player.xp % Player.xp_to_reach
-		Player.xp_to_reach = int32(float32(Player.xp_to_reach) * 1.15)
+		Player.xp_to_reach = int32(float32(Player.xp_to_reach) * 1.25)
 	}
 }
 

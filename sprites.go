@@ -64,7 +64,7 @@ var (
 		x:           880,
 		y:           896,
 		width:       120,
-		height:      120,
+		height:      104,
 		frame_count: 1,
 	}
 	// :s_ui
