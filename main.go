@@ -28,7 +28,7 @@ var (
 		name:          "Player",
 		health:        100,
 		max_health:    100,
-		attack_damage: 10,
+		attack_damage: 35,
 		position: rl.Vector2{
 			X: windowSize.X / 4,
 			Y: windowSize.Y - 48*3 - 30,
@@ -46,6 +46,7 @@ var (
 		attackType:     0,
 		entity_type:    PLAYER,
 		hitbox:         rl.Rectangle{X: windowSize.X / 4, Y: windowSize.Y - 48*3 - 30, Width: 0, Height: 0},
+		xp_to_reach:    100,
 		xp:             0,
 	}
 	deltaTime             float32    = 0
@@ -458,7 +459,9 @@ func print_debug_info() {
 	PrintMemUsage()
 	fmt.Printf("Player position: x {%f} y{%f} \n", Player.position.X, Player.position.Y)
 	fmt.Printf("Player world position: x: {%f} y: {%f}\n", Player.world_position.X, Player.world_position.Y)
-	fmt.Printf("Player hitbox %v", Player.hitbox)
+	fmt.Printf("Player hitbox %v\n", Player.hitbox)
+	fmt.Printf("Player xp: %d\n", Player.xp)
+	fmt.Printf("Player xp to reach: %d\n", Player.xp_to_reach)
 	println("Player is using attack: ", Player.attackType)
 	println("Player is attacking: ", Player.isAttacking)
 	println("Player is running: ", Player.isRunning)
@@ -499,28 +502,29 @@ func toggle_fullscreen() {
 }
 func calculate_window(width, height int) float64 {
 	// Seitenverhältnis des Referenzfensters
-	referenzSeitenverhältnis := float64(windowSize.X) / float64(windowSize.Y)
+	refWindow := float64(windowSize.X) / float64(windowSize.Y)
 
 	// Seitenverhältnis des aktuellen Fensters
-	fensterSeitenverhältnis := float64(width) / float64(height)
+	window := float64(width) / float64(height)
 
 	// Berechne den Skalierungsfaktor basierend auf dem Seitenverhältnisunterschied
-	skala := math.Min(float64(width)/float64(windowSize.X), float64(height)/float64(windowSize.Y))
+	scale := math.Min(float64(width)/float64(windowSize.X), float64(height)/float64(windowSize.Y))
 
 	// Anpassen der Skala, um das Seitenverhältnis des Referenzfensters beizubehalten
-	if fensterSeitenverhältnis > referenzSeitenverhältnis {
-		skala *= referenzSeitenverhältnis / fensterSeitenverhältnis
+	if window > refWindow {
+		scale *= refWindow / window
 	} else {
-		skala *= fensterSeitenverhältnis / referenzSeitenverhältnis
+		scale *= window / refWindow
 	}
 
-	return skala
+	return scale
 }
 func player_add_xp(xp int32) {
-	Player.xp += float32(xp)
-	if Player.xp >= 100 {
+	Player.xp += xp
+	if Player.xp >= Player.xp_to_reach {
 		Player.level += 1
-		Player.xp = float32(int32(Player.xp) % 100)
+		Player.xp = Player.xp % Player.xp_to_reach
+		Player.xp_to_reach = int32(float32(Player.xp_to_reach) * 1.15)
 	}
 }
 

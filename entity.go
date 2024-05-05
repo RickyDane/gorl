@@ -55,7 +55,8 @@ type Entity struct {
 	is_colliding      bool
 	colliding_objects list.List
 	current_sprite    Sprite
-	xp                float32
+	xp                int32
+	xp_to_reach       int32
 	level             int32
 }
 
