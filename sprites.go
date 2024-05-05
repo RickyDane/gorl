@@ -7,7 +7,7 @@ type Sprite struct {
 	y           float32
 	width       float32
 	height      float32
-	frame_count int
+	frame_count int64
 }
 
 // Sprite atlas
@@ -35,7 +35,7 @@ var (
 		y:           96,
 		width:       64,
 		height:      48,
-		frame_count: 6,
+		frame_count: 5,
 	}
 	attack2_anim = Sprite{
 		x:           0,
@@ -77,7 +77,7 @@ var (
 )
 
 func get_anim_transform(entity *Entity, speed int) rl.Rectangle {
-	entity.animation_phase = int(frameCount) / speed % entity.current_sprite.frame_count
+	entity.animation_phase = entity.frame_count / int64(speed) % entity.current_sprite.frame_count
 	entity_width_factor := 1
 	if !entity.isFacingRight {
 		entity_width_factor = -1

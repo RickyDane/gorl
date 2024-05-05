@@ -38,6 +38,7 @@ type Entity struct {
 	attack_damage     float32
 	entity_type       EntityType
 	position          rl.Vector2
+	size              rl.Vector2
 	world_position    rl.Vector2
 	speed             float32
 	sprint_speed      float32
@@ -46,33 +47,37 @@ type Entity struct {
 	isAttacking       bool
 	attackType        int32
 	isFacingRight     bool
-	animation_phase   int
+	animation_phase   int64
+	frame_count       int64
 	hitbox            rl.Rectangle
 	was_hit           bool
 	hit_cooldown      float32
 	is_colliding      bool
 	colliding_objects list.List
 	current_sprite    Sprite
+	xp                float32
+	level             int32
 }
 
 func (e *Entity) update() {
+	e.frame_count++
 	// Update hitbox to keep up with entity transform
 	e.update_hitbox()
 	e.check_collisions()
-	e.print_debug_info()
+	// e.print_debug_info()
 }
 
 func (e *Entity) draw() {
 
 	// Change the position of the entity relative to the players world position
-	e.position.X = e.world_position.X - Player.world_position.X/3
-	e.position.Y = windowSize.Y - e.current_sprite.height*4 - 25
+	e.position.X = e.world_position.X - Player.world_position.X/2
+	e.position.Y = windowSize.Y - e.size.Y - 30
 
 	if e.was_hit {
 		rl.DrawTexturePro(
 			sprite_atlas,
 			get_anim_transform(e, 6),
-			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.current_sprite.width * 4, Height: e.current_sprite.height * 4},
+			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.size.X, Height: e.size.Y},
 			rl.Vector2{X: 0, Y: 0},
 			0,
 			rl.Red,
@@ -86,7 +91,7 @@ func (e *Entity) draw() {
 		rl.DrawTexturePro(
 			sprite_atlas,
 			get_anim_transform(e, 6),
-			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.current_sprite.width * 4, Height: e.current_sprite.height * 4},
+			rl.Rectangle{X: e.position.X, Y: e.position.Y, Width: e.size.X, Height: e.size.Y},
 			rl.Vector2{X: 0, Y: 0},
 			0,
 			rl.White,
@@ -96,7 +101,7 @@ func (e *Entity) draw() {
 	if isHitboxDebug {
 		// Draw entity name centered over head
 		rl.DrawRectangleLines(int32(e.hitbox.X), int32(e.hitbox.Y), int32(e.hitbox.Width), int32(e.hitbox.Height), rl.Red)
-		rl.DrawText(e.name, int32(e.position.X), int32(e.hitbox.Y), 5, rl.Red)
+		rl.DrawText(e.name, int32(e.hitbox.X), int32(e.hitbox.Y), 5, rl.Red)
 	}
 
 	e.draw_healthbar()
@@ -104,14 +109,14 @@ func (e *Entity) draw() {
 
 func (e *Entity) update_hitbox() {
 	if e.entity_type == PLAYER && !Player.isAttacking {
-		e.hitbox.Width = e.current_sprite.width
-		e.hitbox.X = e.position.X + e.current_sprite.width
-		e.hitbox.Height = e.current_sprite.height * 3
-		e.hitbox.Y = Player.position.Y
+		e.hitbox.Width = e.size.X / 2
+		e.hitbox.X = e.position.X + e.hitbox.Width/2
+		e.hitbox.Height = e.size.Y
+		e.hitbox.Y = e.position.Y
 	} else if e.entity_type == DEMON {
-		e.hitbox.Width = e.current_sprite.width * 2
-		e.hitbox.X = e.position.X + e.current_sprite.width
-		e.hitbox.Height = e.current_sprite.height * 4
+		e.hitbox.Width = e.size.X / 2
+		e.hitbox.X = e.position.X + e.hitbox.Width/2
+		e.hitbox.Height = e.size.Y
 		e.hitbox.Y = e.position.Y
 	}
 }

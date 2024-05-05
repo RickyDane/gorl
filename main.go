@@ -15,7 +15,6 @@ type App struct{}
 
 // Global variables
 var (
-	frameCount   int64
 	update_count int64
 	windowSize   = rl.Vector2{
 		X: 1280,
@@ -34,6 +33,10 @@ var (
 			X: windowSize.X / 4,
 			Y: windowSize.Y - 48*3 - 30,
 		},
+		size: rl.Vector2{
+			X: 48 * 3,
+			Y: 48 * 3,
+		},
 		world_position: rl.Vector2{X: windowSize.X / 4, Y: windowSize.Y*3 - 30},
 		speed:          15,
 		sprint_speed:   25,
@@ -43,6 +46,7 @@ var (
 		attackType:     0,
 		entity_type:    PLAYER,
 		hitbox:         rl.Rectangle{X: windowSize.X / 4, Y: windowSize.Y - 48*3 - 30, Width: 0, Height: 0},
+		xp:             0,
 	}
 	deltaTime             float32    = 0
 	betweenAttacksTimer   float32    = TIME_FOR_ATTACK_2
@@ -111,7 +115,6 @@ func main() {
 		// Main engine draw method implementation
 		app.Draw()
 		rl.EndTextureMode()
-
 		// At the end draw the texture scaled to the window size
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
@@ -144,10 +147,10 @@ func (a *App) Setup() {
 	// window_scale = float32(math.Min(float64(rl.GetScreenWidth())/float64(windowSize.X), float64(rl.GetScreenHeight())/float64(windowSize.Y)))
 	window_scale = float32(calculate_window(rl.GetScreenWidth(), rl.GetScreenHeight()))
 	window_render_texture = rl.LoadRenderTexture(int32(windowSize.X), int32(windowSize.Y))
-	rl.SetTextureFilter(window_render_texture.Texture, rl.TextureFilterNearest)
+	rl.SetTextureFilter(window_render_texture.Texture, rl.TextureFilterLinearMipNearest)
 
 	// Initial window size
-	rl.MaximizeWindow()
+	// rl.MaximizeWindow()
 
 	// Load sprite atlas
 	sprite_atlas = rl.LoadTexture("assets/sprite_atlas.png")
@@ -162,18 +165,21 @@ func (a *App) Setup() {
 	bg_layer_6 = get_texture(backgroundSprites[6])
 	bg_layer_7 = get_texture(backgroundSprites[7])
 	bg_layer_8 = get_texture(backgroundSprites[8])
+
+	for i := 0; i < 2000; i++ {
+		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(int32(windowSize.X), 1000000)), Y: -25}, DEMON)
+	}
 }
 
 func (a *App) Update() {
-	// Update frame count: important for animations!
-	frameCount++
+	Player.frame_count++ // Update frame count | Important for animations!
 
 	// Update window information for scaling
 	window_scale = float32(calculate_window(rl.GetRenderWidth(), rl.GetRenderHeight()))
 	scaled_width = float32(rl.GetRenderWidth()) - (windowSize.X * window_scale)
 	scaled_height = float32(rl.GetRenderHeight()) - (windowSize.Y * window_scale)
 
-	// :iplayer Check player input for character movement
+	// :i_player Check player input for character movement
 	if Player.isAttacking {
 		if (Player.attackType == ATTACK_LIGHT || Player.attackType == ATTACK_LIGHT_BACK || Player.attackType == ATTACK_HEAVY) && Player.animation_phase < Player.current_sprite.frame_count-1 {
 			a.play_attack_animation()
@@ -218,9 +224,6 @@ func (a *App) Update() {
 	} else if rl.IsKeyDown(rl.KeyD) {
 		a.run_right()
 	} else {
-		// Constantly update player hitbox to keep up with player transform
-		Player.update_hitbox()
-		a.idle_player()
 		Player.isRunning = false
 		Player.isAttacking = false
 	}
@@ -241,7 +244,7 @@ func (a *App) Update() {
 	if rl.IsKeyPressed(rl.KeyF1) { // Show hitboxes
 		isHitboxDebug = !isHitboxDebug
 	}
-	if rl.IsKeyPressed(rl.KeyO) { // Add new entity to entity list
+	if rl.IsKeyDown(rl.KeyO) { // Add new entity to entity list
 		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(0, int32(windowSize.X))), Y: -25}, DEMON)
 	}
 	if rl.IsKeyPressed(rl.KeyL) {
@@ -257,6 +260,12 @@ func (a *App) Update() {
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		element.Value.(*Entity).update()
 	}
+
+	if !Player.isAttacking && !Player.isRunning {
+		a.idle_player()
+	}
+	// Constantly update player hitbox to keep up with player transform
+	Player.update_hitbox()
 
 	// Debug print output
 	print_debug_info()
@@ -283,7 +292,7 @@ func (a *App) Draw() {
 	rl.DrawTexturePro(
 		sprite_atlas,
 		get_anim_transform(&Player, 6),
-		rl.Rectangle{X: Player.position.X, Y: Player.position.Y, Width: Player.current_sprite.width * 3, Height: Player.current_sprite.height * 3},
+		rl.Rectangle{X: Player.position.X, Y: Player.position.Y, Width: Player.size.X, Height: Player.size.Y},
 		rl.Vector2{X: 0, Y: 0},
 		0,
 		rl.White,
@@ -302,6 +311,9 @@ func (a *App) Draw() {
 	bg_layer_8.Width = int32(windowSize.X)
 	bg_layer_8.Height = int32(windowSize.Y)
 	rl.DrawTextureRec(*bg_layer_8, rl.Rectangle{X: float32(scrolling_forefore), Y: 0, Width: float32(bg_layer_8.Width), Height: float32(bg_layer_8.Height)}, rl.Vector2{X: 0, Y: 50}, color.RGBA{255, 255, 255, 255})
+
+	// Draw entire user interface
+	draw_ui()
 
 	// Draw fps for debugging
 	rl.DrawFPS(10, 10)
@@ -343,9 +355,9 @@ func (a *App) play_attack_animation() {
 	}
 }
 func attack(attack_damage float32) {
-	Player.hitbox.Width = 100
+	Player.hitbox.Width = Player.size.X / 1.5
 	if !Player.isFacingRight {
-		Player.hitbox.X = Player.position.X + 25
+		Player.hitbox.X = Player.position.X + 10
 	}
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		entity := element.Value.(*Entity)
@@ -354,6 +366,7 @@ func attack(attack_damage float32) {
 			entity.health -= attack_damage
 			if entity.health <= 0 {
 				kill_entity(entity)
+				player_add_xp(25)
 				attack(attack_damage)
 				break
 			}
@@ -427,7 +440,7 @@ func get_texture(sprite *rl.Image) *rl.Texture2D {
 }
 func reset_for_animation() {
 	Player.animation_phase = 0
-	frameCount = 0
+	Player.frame_count = 0
 }
 func PrintMemUsage() {
 	var m runtime.MemStats
@@ -456,7 +469,7 @@ func print_debug_info() {
 	fmt.Printf("Window width: %f height: %f\n", windowSize.X, windowSize.Y)
 	fmt.Printf("Window scale: %f\n", window_scale)
 	fmt.Printf("%f %f\n", scaled_width, scaled_height)
-	println("frameCount: ", frameCount)
+	println("frameCount: ", Player.frame_count)
 	println("update_count: ", update_count)
 	// fmt.Printf("Entites array:  %+v", arr_entities)
 }
@@ -484,7 +497,6 @@ func toggle_fullscreen() {
 	}
 	is_fullscreen = !is_fullscreen
 }
-
 func calculate_window(width, height int) float64 {
 	// Seitenverhältnis des Referenzfensters
 	referenzSeitenverhältnis := float64(windowSize.X) / float64(windowSize.Y)
@@ -504,8 +516,16 @@ func calculate_window(width, height int) float64 {
 
 	return skala
 }
+func player_add_xp(xp int32) {
+	Player.xp += float32(xp)
+	if Player.xp >= 100 {
+		Player.level += 1
+		Player.xp = float32(int32(Player.xp) % 100)
+	}
+}
 
-// Engine logic
+// :e_logic
+// # -- Engine logic -- #
 func setup_audio() {
 	// Init audio
 	rl.InitAudioDevice()
@@ -524,15 +544,19 @@ func spawn_entity(name string, position rl.Vector2, entity_type EntityType) Enti
 		is_facing_right = false
 	}
 
-	position.Y = windowSize.Y - 48*3 - 30
+	position.Y = windowSize.Y - 48*4 - 30
 
 	new_entity := Entity{
-		id:             int64(rl.GetRandomValue(0, 100000)),
-		name:           name,
-		health:         100,
-		max_health:     100,
-		attack_damage:  10,
-		position:       position,
+		id:            int64(rl.GetRandomValue(0, 100000)),
+		name:          name,
+		health:        100,
+		max_health:    100,
+		attack_damage: 10,
+		position:      position,
+		size: rl.Vector2{
+			X: 48 * 4,
+			Y: 48 * 4,
+		},
 		world_position: rl.Vector2{X: position.X, Y: position.Y},
 		speed:          5,
 		isFacingRight:  is_facing_right,
@@ -554,16 +578,22 @@ func kill_entity(entity *Entity) {
 	}
 }
 func is_entity_colliding(e1, e2 Entity) bool {
-	// Check if entities are too far apart on the X-axis
-	if math.Abs(float64(e1.hitbox.X-e2.hitbox.X)) > (float64(e1.hitbox.Width/2 + e2.hitbox.Width/2)) {
-		return false
+	// Check if the right side of the first entity is to the left of the left side of the second entity
+	if e1.hitbox.X+e1.hitbox.Width <= e2.hitbox.X {
+		return false // No overlap
 	}
-
-	// Check if entities are too far apart on the Y-axis
-	if math.Abs(float64(e1.hitbox.Y-e2.hitbox.Y)) > (float64(e1.hitbox.Height/2 + e2.hitbox.Height/2)) {
-		return false
+	// Check if the left side of the first entity is to the right of the right side of the second entity
+	if e1.hitbox.X >= e2.hitbox.X+e2.hitbox.Width {
+		return false // No overlap
 	}
-
-	// If they passed both checks, they must be overlapping
+	// Check if the bottom side of the first entity is above the top side of the second entity
+	if e1.hitbox.Y+e1.hitbox.Height <= e2.hitbox.Y {
+		return false // No overlap
+	}
+	// Check if the top side of the first entity is below the bottom side of the second entity
+	if e1.hitbox.Y >= e2.hitbox.Y+e2.hitbox.Height {
+		return false // No overlap
+	}
+	// If none of the above conditions hold, there must be a collision
 	return true
 }
