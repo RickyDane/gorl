@@ -10,4 +10,5 @@ var (
 	SWING         rl.Sound
 	SLASH_STRONG  rl.Sound
 	GRASS_RUNNING rl.Sound
+	HIT           rl.Sound
 )

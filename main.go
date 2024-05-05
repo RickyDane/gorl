@@ -167,7 +167,7 @@ func (a *App) Setup() {
 	bg_layer_7 = get_texture(backgroundSprites[7])
 	bg_layer_8 = get_texture(backgroundSprites[8])
 
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < 3000; i++ {
 		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(int32(windowSize.X), 1000000)), Y: -25}, DEMON)
 	}
 }
@@ -191,20 +191,13 @@ func (a *App) Update() {
 				Player.current_sprite = attack2_anim
 				reset_for_animation()
 				a.play_attack_animation()
-				rl.PlaySound(SWING)
 				attack(Player.attack_damage)
+				rl.PlaySound(SWING)
 			}
 			betweenAttacksTimer -= 1 * deltaTime
 		} else {
 			reset_for_animation()
 			betweenAttacksTimer = TIME_FOR_ATTACK_2
-			if pt_chance(0.75) && Player.attackType == ATTACK_HEAVY {
-				attack(Player.attack_damage * 3)
-			} else if Player.attackType == ATTACK_HEAVY {
-				attack(Player.attack_damage * 1.5)
-			} else {
-				attack(Player.attack_damage)
-			}
 			Player.isAttacking = false
 			Player.attackType = ATTACK_NONE
 		}
@@ -213,12 +206,18 @@ func (a *App) Update() {
 		Player.attackType = ATTACK_LIGHT
 		a.play_attack_animation()
 		rl.PlaySound(SWING)
+		attack(Player.attack_damage)
 		Player.isAttacking = true
 	} else if rl.IsMouseButtonPressed(rl.MouseButtonRight) {
 		reset_for_animation()
 		Player.attackType = ATTACK_HEAVY
 		a.play_attack_animation()
 		rl.PlaySound(SLASH_STRONG)
+		if pt_chance(0.5) {
+			attack(Player.attack_damage * 2)
+		} else {
+			attack(Player.attack_damage)
+		}
 		Player.isAttacking = true
 	} else if rl.IsKeyDown(rl.KeyA) {
 		a.run_left()
@@ -362,15 +361,11 @@ func attack(attack_damage float32) {
 	}
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		entity := element.Value.(*Entity)
+		if entity.was_hit {
+			continue
+		}
 		if is_entity_colliding(Player, *entity) {
-			entity.was_hit = true
-			entity.health -= attack_damage
-			if entity.health <= 0 {
-				kill_entity(entity)
-				player_add_xp(25)
-				attack(attack_damage)
-				break
-			}
+			entity.hit(attack_damage)
 		}
 	}
 }
@@ -540,6 +535,7 @@ func setup_audio() {
 	SWING = rl.LoadSound("assets/sounds/swing.wav")
 	SLASH_STRONG = rl.LoadSound("assets/sounds/slash_strong.wav")
 	GRASS_RUNNING = rl.LoadSound("assets/sounds/grass_running.wav")
+	HIT = rl.LoadSound("assets/sounds/hit.wav")
 }
 func spawn_entity(name string, position rl.Vector2, entity_type EntityType) Entity {
 	// Make the entity face the player
@@ -576,7 +572,6 @@ func kill_entity(entity *Entity) {
 	for element := ls_entities.Front(); element != nil; element = element.Next() {
 		if element.Value.(*Entity) == entity {
 			ls_entities.Remove(element)
-			fmt.Println("Entity killed")
 			break
 		}
 	}

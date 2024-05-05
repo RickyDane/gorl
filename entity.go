@@ -88,6 +88,9 @@ func (e *Entity) draw() {
 			e.was_hit = false
 			e.hit_cooldown = ENTITY_HIT_COOLDOWN
 		}
+		if e.health <= 0 {
+			kill_entity(e)
+		}
 	} else {
 		rl.DrawTexturePro(
 			sprite_atlas,
@@ -145,6 +148,18 @@ func (e *Entity) draw_healthbar() {
 	rl.DrawText(strconv.FormatInt(int64(percentage), 10)+"%", e.hitbox.ToInt32().X, e.hitbox.ToInt32().Y-15, 10, rl.White)
 }
 
+func (e *Entity) hit(damage float32) {
+	e.was_hit = true
+	e.health -= damage
+	rl.PlaySound(HIT)
+	if e.health <= 0 {
+		e.health = 0
+		player_add_xp(25)
+	}
+}
+
+// :u_functions
+// util functions
 func (e *Entity) print_debug_info() {
 	fmt.Print("\033[H\033[2J")
 	println("##-- Entity --##")
