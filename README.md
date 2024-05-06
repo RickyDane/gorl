@@ -1,4 +1,7 @@
 # Project overview
+- It's just a fun project without any effort of good code, atleast for now
+
+_Hallo Moritz!_ 👨‍💻
 
 ## Reason why
 - I just wanted to get a sneak peak into Go and now I love it!
