@@ -23,6 +23,7 @@ var (
 	scaled_width  float32 = 0
 	scaled_height float32 = 0
 	window_scale  float32 = 0
+	window_hdpi_scale rl.Vector2
 	Player                = Entity{
 		id:            int64(rl.GetRandomValue(0, 100000)),
 		name:          "Player",
@@ -102,7 +103,7 @@ const (
 func main() {
 	app := App{}
 	// Make window resizable
-	rl.SetConfigFlags(rl.FlagWindowResizable)
+	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagWindowHighdpi)
 	rl.InitWindow(int32(windowSize.X), int32(windowSize.Y), "Demon Slayer")
 	defer rl.CloseWindow()
 
@@ -137,8 +138,8 @@ func main() {
 			rl.Rectangle{
 				X:      scaled_width - scaled_width/2,
 				Y:      scaled_height - scaled_height/2,
-				Width:  windowSize.X * window_scale,
-				Height: windowSize.Y * window_scale,
+				Width:  windowSize.X * window_scale/window_hdpi_scale.X,
+				Height: windowSize.Y * window_scale/window_hdpi_scale.Y,
 			},
 			rl.Vector2{X: 0, Y: 0},
 			0,
@@ -161,6 +162,7 @@ func (a *App) Setup() {
 	window_scale = float32(calculate_window(rl.GetScreenWidth(), rl.GetScreenHeight()))
 	window_render_texture = rl.LoadRenderTexture(int32(windowSize.X), int32(windowSize.Y))
 	rl.SetTextureFilter(window_render_texture.Texture, rl.TextureFilterLinearMipNearest)
+	window_hdpi_scale = rl.GetWindowScaleDPI();
 
 	// Initial window size
 	// rl.MaximizeWindow()
@@ -194,8 +196,8 @@ func (a *App) Update() {
 
 	// Update mouse position
 	mouse_pos = rl.Rectangle{
-		X:      float32(rl.GetMouseX()) / window_scale,
-		Y:      float32(rl.GetMouseY()) / window_scale,
+		X:      float32(rl.GetMouseX()) / window_scale * window_hdpi_scale.X,
+		Y:      float32(rl.GetMouseY()) / window_scale * window_hdpi_scale.Y,
 		Width:  mouse_pos.Width,
 		Height: mouse_pos.Height,
 	}
