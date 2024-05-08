@@ -20,6 +20,7 @@ func draw_ui() {
 		}
 	}
 	draw_xp_bar()
+	draw_debug_ui()
 }
 
 // Player xp bar
@@ -46,4 +47,7 @@ func draw_shop_ui() {
 	draw_sprite(&shop_ui_entity, 1, rl.White, 1)
 	rl.DrawText("Upgrades", int32(shop_ui_entity.position.X)+int32(shop_ui_entity.size.X)/2-rl.MeasureText("Upgrades", 30)/2+1, int32(shop_ui_entity.position.Y)+20+1, 30, rl.ColorAlpha(rl.Gray, 0.75))
 	rl.DrawText("Upgrades", int32(shop_ui_entity.position.X)+int32(shop_ui_entity.size.X)/2-rl.MeasureText("Upgrades", 30)/2, int32(shop_ui_entity.position.Y)+20, 30, rl.ColorAlpha(rl.Black, 0.5))
+}
+func draw_debug_ui() {
+	rl.DrawText(strconv.FormatFloat(float64(deltaTime), 'G', -1, 64), 50, 50, 10, rl.ColorAlpha(rl.Gray, 0.75))
 }

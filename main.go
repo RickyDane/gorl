@@ -61,6 +61,7 @@ var (
 	betweenAttacksTimer   float32    = TIME_FOR_ATTACK_2
 	isHitboxDebug         bool       = false
 	ls_entities           *list.List = list.New()
+	arr_entities		  []*Entity = make([]*Entity, 0)
 	is_fullscreen         bool       = false
 	window_render_texture rl.RenderTexture2D
 	entity_hovered        *Entity = &Entity{}
@@ -113,7 +114,7 @@ func main() {
 	// Main loop for window / game
 	for !rl.WindowShouldClose() {
 		// Update deltaTime
-		deltaTime = 1.0 / 60
+		deltaTime = 1.0 / float32(rl.GetFPS())
 
 		// Play background music with updating the stream buffer
 		rl.UpdateMusicStream(BG_MUSIC)
@@ -182,8 +183,8 @@ func (a *App) Setup() {
 	bg_layer_8 = get_texture(backgroundSprites[8])
 
 	// Spawn the first 3000 enemies across the world
-	for i := 0; i < 3000; i++ {
-		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(int32(windowSize.X), 1000000)), Y: -25}, ENEMY, DEMON, 4)
+	for i := 0; i < 100; i++ {
+		spawn_entity("Demon", rl.Vector2{X: float32(rl.GetRandomValue(int32(windowSize.X), 100000)), Y: -25}, ENEMY, DEMON, 4)
 	}
 
 	// Spawn a shop
@@ -217,6 +218,15 @@ func (a *App) Update() {
 			is_entity_hovered = true
 		}
 	}
+	/*for i := range arr_entities {
+		entity := arr_entities[i]
+		entity.update()
+		// Check if mouse is over entities and draw healthbar
+		if is_entity_colliding(Entity{hitbox: mouse_pos}, *entity) {
+			entity_hovered = entity
+			is_entity_hovered = true
+		}
+	}*/
 	if !is_entity_hovered {
 		entity_hovered = &Entity{}
 	}
@@ -336,6 +346,10 @@ func (a *App) Draw() {
 		entity := element.Value.(*Entity)
 		entity.draw()
 	}
+	/*for i := range arr_entities {
+		entity := arr_entities[i]
+		entity.draw()
+	}*/
 
 	// :dplayer Draw the player sprite
 	draw_sprite(&Player, 1, Player.sprite_color, 6)
@@ -518,6 +532,7 @@ func print_debug_info() {
 	fmt.Printf("Between attacks timer: %f \n", betweenAttacksTimer)
 	println("Is audio device ready: ", rl.IsAudioDeviceReady())
 	println("Entities list length", ls_entities.Len())
+	println("Entities array length", len(arr_entities))
 	fmt.Printf("Window width: %f height: %f\n", windowSize.X, windowSize.Y)
 	fmt.Printf("Window scale: %f\n", window_scale)
 	fmt.Printf("%f %f\n", scaled_width, scaled_height)
@@ -640,6 +655,7 @@ func spawn_entity(name string, position rl.Vector2, entity_type EntityType, enem
 		sprite_color:   rl.White,
 	}
 	ls_entities.PushBack(&new_entity)
+	// arr_entities = append(arr_entities, &new_entity)
 	return new_entity
 }
 func kill_entity(entity *Entity) {
